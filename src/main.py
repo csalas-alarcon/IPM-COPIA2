@@ -9,6 +9,8 @@ Uso:
     python src/main.py --source 1              # otra webcam
     python src/main.py --source http://IP:8080/video   # cámara del móvil
     python src/main.py --model heavy --exercises pushup bulgarian_squat
+    python src/main.py --video demo.mp4        # vídeo grabado en vez de la cámara
+    python src/main.py --video demo.mp4 --exercises pushup
 """
 
 # =============================================================================
@@ -29,7 +31,7 @@ from config import MODEL_VARIANTS, settings  # noqa: E402
 from exercises.catalog import EXERCISES, build_exercises  # noqa: E402
 from game.game import Game  # noqa: E402
 from ui.canvas import TextRenderer  # noqa: E402
-from vision.camera import Camera  # noqa: E402
+from vision.camera import Camera, is_video_file  # noqa: E402
 from vision.detector import PoseDetector  # noqa: E402
 from vision.models import ensure_model  # noqa: E402
 
@@ -39,8 +41,13 @@ from vision.models import ensure_model  # noqa: E402
 # =============================================================================
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Pose Trainer: cuenta y puntúa dominadas, flexiones y sentadillas búlgaras.")
-    p.add_argument("--source", default=None,
-                   help="Índice de cámara (0, 1...) o URL de stream (p. ej. la cámara del móvil).")
+    src = p.add_mutually_exclusive_group()
+    src.add_argument("--source", default=None,
+                     help="Índice de cámara (0, 1...), URL de stream (p. ej. la cámara del móvil) "
+                          "o ruta de un archivo de vídeo.")
+    src.add_argument("--video", default=None, metavar="ARCHIVO",
+                     help="Usa un vídeo grabado (.mp4, .avi, .mov...) en vez de la cámara. "
+                          "Se juega igual que en vivo: el vídeo empieza al pulsar ENTER.")
     p.add_argument("--model", choices=MODEL_VARIANTS, default=settings.model.variant,
                    help="Variante del Pose Landmarker (lite = rápido, heavy = preciso).")
     p.add_argument("--exercises", nargs="+", choices=list(EXERCISES), default=list(settings.game.exercises),
@@ -51,18 +58,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Repeticiones objetivo por ejercicio.")
     p.add_argument("--width", type=int, default=settings.camera.width)
     p.add_argument("--height", type=int, default=settings.camera.height)
-    p.add_argument("--no-mirror", action="store_true", help="No mostrar la imagen en espejo.")
+    mirror = p.add_mutually_exclusive_group()
+    mirror.add_argument("--no-mirror", action="store_true",
+                        help="No mostrar la imagen en espejo (por defecto, espejo sólo con cámara).")
+    mirror.add_argument("--mirror", action="store_true",
+                        help="Mostrar la imagen en espejo también con un vídeo.")
     p.add_argument("--no-download", action="store_true", help="No descargar el modelo si falta.")
     p.add_argument("--no-save", action="store_true", help="No guardar los resultados en results/.")
     return p.parse_args(argv)
 
 
 def apply_args(args: argparse.Namespace) -> None:
-    if args.source is not None:
+    if args.video is not None:
+        if not is_video_file(args.video):
+            raise FileNotFoundError(f"No existe el archivo de vídeo '{args.video}'.")
+        settings.camera.source = args.video
+    elif args.source is not None:
         settings.camera.source = args.source
     settings.camera.width = args.width
     settings.camera.height = args.height
-    settings.camera.mirror = not args.no_mirror
+    # Espejo: natural con la cámara (como un espejo); un vídeo grabado se ve tal cual
+    video = is_video_file(settings.camera.source)
+    settings.camera.mirror = args.mirror or (not video and not args.no_mirror)
     settings.model.variant = args.model
     settings.game.exercises = tuple(args.exercises)
     settings.game.exercise_duration = args.duration
@@ -75,9 +92,9 @@ def apply_args(args: argparse.Namespace) -> None:
 # =============================================================================
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    apply_args(args)
 
     try:
+        apply_args(args)
         model_path = ensure_model(settings.model.variant, download=not args.no_download)
         exercises = build_exercises(settings.game.exercises)
         renderer = TextRenderer()

@@ -188,6 +188,146 @@ class TestGameFlow(unittest.TestCase):
 
 
 # =============================================================================
+# Pruebas con un archivo de vídeo
+# =============================================================================
+def write_video(path: Path, frames: int = 45, fps: float = 30.0, size=(320, 240)) -> Path:
+    """Vídeo sintético: cada frame lleva su índice codificado en el color."""
+    import cv2
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
+    for i in range(frames):
+        writer.write(np.full((size[1], size[0], 3), (i * 5) % 256, np.uint8))
+    writer.release()
+    return path
+
+
+class TestVideoSource(unittest.TestCase):
+    def test_playback_pause_end_and_rewind(self):
+        from config import CameraConfig
+        from vision.camera import Camera, is_video_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_video(Path(tmp) / "demo.mp4")
+            self.assertTrue(is_video_file(str(path)))
+            self.assertFalse(is_video_file("0") or is_video_file("http://x/video"))
+            with Camera(CameraConfig(source=str(path), mirror=False)) as cam:
+                self.assertTrue(cam.is_video and cam.paused)
+                self.assertEqual(cam.frame_size, (320, 240))
+                self.assertAlmostEqual(cam.duration, 1.5, places=2)
+                first_id = cam.frame_id
+                cam.read()
+                cam.read()
+                self.assertEqual(cam.frame_id, first_id)     # En pausa no avanza
+                self.assertEqual(cam.clock(), 0.0)
+
+                cam.play()
+                for _ in range(10):
+                    cam.read()
+                self.assertGreater(cam.frame_id, first_id)
+                self.assertGreater(cam.position, 0.0)
+                self.assertEqual(cam.timestamp_ms(), round(cam.position * 1000))
+
+                cam.pause()
+                frozen = cam.clock()
+                cam.read()
+                self.assertEqual(cam.clock(), frozen)       # El reloj se congela en pausa
+
+                cam.play()
+                for _ in range(200):                       # Hasta el final (tiempo real, ~1.5 s)
+                    cam.read()
+                    if cam.ended:
+                        break
+                self.assertTrue(cam.ended and cam.paused)
+                self.assertIsNotNone(cam.read())           # Al acabar sigue mostrando el último frame
+
+                cam.rewind()
+                self.assertFalse(cam.ended)
+                self.assertTrue(cam.paused)
+                self.assertEqual(cam.position, 0.0)
+
+
+class FakeVideo:
+    """Vídeo simulado para el juego: reloj controlado a mano."""
+    is_video = True
+    source = "demo.mp4"
+
+    def __init__(self):
+        self.position, self.duration = 0.0, 30.0
+        self.paused, self.ended = True, False
+        self.frame_size = (1280, 720)
+
+    def clock(self):
+        return self.position
+
+    def play(self):
+        if not self.ended:
+            self.paused = False
+
+    def toggle_pause(self):
+        self.paused = not self.paused
+
+    def rewind(self):
+        self.position, self.paused, self.ended = 0.0, True, False
+
+
+class TestVideoGameFlow(unittest.TestCase):
+    def test_video_flow(self):
+        from game.game import Game, Phase
+        from ui.canvas import TextRenderer
+
+        settings = Settings()
+        settings.game.exercises = ("pushup", "bulgarian_squat")
+        settings.game.save_results = False
+        cam = FakeVideo()
+        g = Game(settings, cam, None, build_exercises(settings.game.exercises), TextRenderer())
+        frame = np.zeros((720, 1280, 3), np.uint8)
+
+        def step(pose):
+            if not cam.paused:
+                cam.position += 1 / 30
+            g._update(pose, g._now())
+            g._draw(frame.copy(), pose, g._now())
+
+        rest = pushup_pose(165)
+        step(rest)
+        self.assertTrue(cam.paused)                    # En el menú el vídeo está en pausa
+        g._handle_key(13)                              # ENTER: empieza el vídeo
+        self.assertFalse(cam.paused)
+        self.assertIs(g.phase, Phase.INSTRUCTIONS)
+        for _ in range(60):
+            step(rest)
+        self.assertIs(g.phase, Phase.COUNTDOWN)
+
+        g._handle_key(ord("p"))                        # Pausa: el juego se congela
+        self.assertTrue(cam.paused)
+        for _ in range(200):
+            step(rest)
+        self.assertIs(g.phase, Phase.COUNTDOWN)
+        g._handle_key(ord("p"))
+        for _ in range(100):
+            step(rest)
+        self.assertIs(g.phase, Phase.ACTIVE)
+
+        for i in range(61):                            # Una repetición buena
+            step(pushup_pose(165 + cosine(i / 60) * (80 - 165)))
+        for _ in range(10):
+            step(rest)
+        self.assertEqual(g.session.count, 1)
+
+        cam.ended = cam.paused = True                  # Se acaba el vídeo a mitad del ejercicio
+        g._on_video_end()
+        self.assertIs(g.phase, Phase.EXERCISE_RESULT)
+        g._draw(frame.copy(), None, g._now())
+        g._handle_key(13)                              # Los ejercicios que faltan se saltan
+        self.assertIs(g.phase, Phase.SUMMARY)
+        self.assertEqual([s.skipped for s in g.sessions], [False, True])
+
+        g._handle_key(13)                              # Jugar otra vez: rebobina
+        self.assertIs(g.phase, Phase.MENU)
+        self.assertFalse(cam.ended)
+        self.assertEqual(cam.position, 0.0)
+
+
+# =============================================================================
 # Punto de entrada
 # =============================================================================
 if __name__ == "__main__":

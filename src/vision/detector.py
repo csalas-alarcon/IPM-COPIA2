@@ -2,7 +2,8 @@
 vision/detector.py  ·  Detector de pose.
 
 Envoltorio del Pose Landmarker de MediaPipe en modo VIDEO: recibe un frame
-BGR de OpenCV y devuelve un PoseFrame (o None si no hay nadie).
+BGR de OpenCV (de la cámara o de un vídeo grabado) y devuelve un PoseFrame
+(o None si no hay nadie).
 """
 
 # =============================================================================
@@ -49,21 +50,31 @@ class PoseDetector:
         )
         self._landmarker = PoseLandmarker.create_from_options(options)
         self._last_ts = -1
+        self._offset = 0
 
     # --- Detección -----------------------------------------------------------
-    def _next_timestamp(self) -> int:
-        # El modo VIDEO exige timestamps estrictamente crecientes
-        ts = int(time.monotonic() * 1000)
+    def _next_timestamp(self, timestamp_ms: int | None = None) -> int:
+        # El modo VIDEO exige timestamps estrictamente crecientes. En vivo se usa
+        # el reloj real; con un vídeo, su propio timestamp más un desplazamiento
+        # que crece si el vídeo se rebobina (así el tracking sigue funcionando).
+        if timestamp_ms is None:
+            ts = int(time.monotonic() * 1000)
+        else:
+            ts = int(timestamp_ms) + self._offset
+            if ts <= self._last_ts:
+                self._offset += self._last_ts + 1 - ts
+                ts = self._last_ts + 1
         if ts <= self._last_ts:
             ts = self._last_ts + 1
         self._last_ts = ts
         return ts
 
-    def detect(self, frame_bgr: np.ndarray) -> PoseFrame | None:
+    def detect(self, frame_bgr: np.ndarray, timestamp_ms: int | None = None) -> PoseFrame | None:
+        """Detecta la pose. timestamp_ms: instante del frame en el vídeo (None = reloj real)."""
         # MediaPipe espera RGB (OpenCV entrega BGR)
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        ts = self._next_timestamp()
+        ts = self._next_timestamp(timestamp_ms)
         result = self._landmarker.detect_for_video(image, ts)
         if not result.pose_landmarks:
             return None

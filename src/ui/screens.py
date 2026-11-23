@@ -3,7 +3,7 @@ ui/screens.py  ·  Pantallas del juego.
 
 Una función draw_* por pantalla (menú, instrucciones, cuenta atrás, HUD,
 resultado del ejercicio y resumen) más los elementos comunes (esqueleto,
-barra de progreso, avisos). Todas reciben un Canvas y dibujan en unidades
+barra de progreso, avisos, indicador del vídeo). Todas reciben un Canvas y dibujan en unidades
 de diseño.
 """
 
@@ -86,18 +86,59 @@ def draw_banner(c: Canvas, text: str, color=RED) -> None:
 # =============================================================================
 # Pantallas
 # =============================================================================
-def draw_menu(c: Canvas, exercises: list[Exercise], duration: float, target: int) -> None:
+def draw_menu(c: Canvas, exercises: list[Exercise], duration: float, target: int,
+              video_name: str | None = None) -> None:
     c.dim(0.6)
     cx = c.W / 2
     c.text("POSE TRAINER", cx, 150, 72, ACCENT, "mm", bold=True, stroke=2)
-    c.text("Cuenta tus repeticiones y puntúa tu técnica con la cámara", cx, 215, 26, WHITE, "mm")
+    if video_name is None:
+        c.text("Cuenta tus repeticiones y puntúa tu técnica con la cámara", cx, 215, 26, WHITE, "mm")
+    else:
+        c.text(f"Vídeo: {video_name}", cx, 215, 26, WHITE, "mm")
     c.panel(cx - 330, 260, cx + 330, 290 + 52 * len(exercises), alpha=0.6)
     for i, ex in enumerate(exercises):
         c.text(f"{i + 1}.  {ex.name}", cx - 290, 300 + 52 * i, 32, WHITE, "lm", bold=True)
     c.text(f"Hasta {target} repeticiones o {int(duration)} s por ejercicio", cx,
            330 + 52 * len(exercises), 22, GREY, "mm")
-    c.text("Pulsa ENTER para empezar", cx, c.H - 120, 34, GREEN, "mm", bold=True, stroke=1)
-    c.text("ESC para salir", cx, c.H - 72, 22, GREY, "mm")
+    start = "Pulsa ENTER o haz clic para empezar"
+    c.text(start, cx, c.H - 120, 34, GREEN, "mm", bold=True, stroke=1)
+    hint = "ESC para salir" if video_name is None else "El vídeo empezará al pulsar ENTER   ·   P: pausa   ·   ESC: salir"
+    c.text(hint, cx, c.H - 72, 22, GREY, "mm")
+
+
+def _mmss(seconds: float) -> str:
+    seconds = max(int(seconds), 0)
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+def draw_video_status(c: Canvas, position: float, duration: float, paused: bool, ended: bool,
+                      show_hint: bool = True) -> None:
+    """Indicador del vídeo (arriba a la derecha) y, debajo, aviso de pausa o de fin del vídeo.
+
+    show_hint: mostrar el aviso de fin del vídeo (sólo tiene sentido durante un ejercicio).
+    """
+    label = "PAUSA" if paused and not ended else ("FIN" if ended else "VÍDEO")
+    if ended and duration > 0:
+        position = duration
+    times = _mmss(position) + (f" / {_mmss(duration)}" if duration > 0 else "")
+    text = f"{label}  {times}   ·   P: pausa"
+    w = c.text_width(text, 16, True)
+    c.panel(c.W - w - 40, 14, c.W - 14, 50, alpha=0.6)
+    c.text(text, c.W - 27, 32, 16, ORANGE if paused else WHITE, "rm", bold=True)
+    if duration > 0:
+        frac = float(np.clip(position / duration, 0, 1))
+        c.rect(c.W - w - 40, 47, c.W - w - 40 + (w + 26) * frac, 50, ACCENT)
+
+    # Aviso bajo el indicador (no tapa los paneles de las pantallas)
+    if ended and show_hint:
+        msg, col = "Fin del vídeo  ·  R: reiniciar  ·  N: saltar", ACCENT
+    elif paused and not ended:
+        msg, col = "PAUSA  ·  P: continuar", ORANGE
+    else:
+        return
+    w = c.text_width(msg, 17, True)
+    c.panel(c.W - w - 46, 56, c.W - 14, 84, alpha=0.8, border=col)
+    c.text(msg, c.W - 30, 70, 17, WHITE, "rm", bold=True)
 
 
 def draw_instructions(c: Canvas, ex: Exercise, index: int, total: int,

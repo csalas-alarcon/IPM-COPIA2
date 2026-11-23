@@ -2,6 +2,12 @@
 game/game.py  ·  Bucle principal y máquina de estados del juego.
 
 MENÚ -> [por cada ejercicio: INSTRUCCIONES -> CUENTA ATRÁS -> ACTIVO -> RESULTADO] -> RESUMEN
+
+Funciona igual con la cámara en vivo que con un vídeo grabado. Con un vídeo:
+  * el vídeo está en pausa en el menú y empieza al pulsar ENTER (o hacer clic);
+  * el reloj del juego es el del vídeo (pausar con P congela también el juego);
+  * al terminar el vídeo se cierra el ejercicio en curso y se puede ver el resumen;
+  * R (o "jugar otra vez") rebobina el vídeo y vuelve al menú.
 """
 
 # =============================================================================
@@ -22,7 +28,8 @@ from exercises.base import Exercise
 from game.session import ExerciseSession, save_sessions
 from ui.canvas import ORANGE, Canvas, TextRenderer, score_color
 from ui.screens import (Feedback, draw_countdown, draw_exercise_result, draw_hud,
-                        draw_instructions, draw_menu, draw_skeleton, draw_summary)
+                        draw_instructions, draw_menu, draw_skeleton, draw_summary,
+                        draw_video_status)
 from vision.camera import Camera
 from vision.detector import PoseDetector
 
@@ -64,17 +71,44 @@ class Game:
         self.window = settings.game.window_name
         self._fullscreen = False
         self._running = True
-        self._reset_game()
+        self._pending_click = False
+        self._last_frame_id: int | None = None
+        self._pose = None
+        self._video_end_handled = False
+        self._reset_game(rewind=False)
+
+    # --- Vídeo y reloj --------------------------------------------------------
+    @property
+    def is_video(self) -> bool:
+        return bool(getattr(self.camera, "is_video", False))
+
+    @property
+    def video_ended(self) -> bool:
+        return self.is_video and bool(self.camera.ended)
+
+    def _now(self) -> float:
+        """Reloj del juego: el del vídeo si se reproduce un archivo, si no el real."""
+        return self.camera.clock() if self.is_video else time.monotonic()
+
+    def _on_video_end(self) -> None:
+        print("[juego] Fin del vídeo")
+        if self.phase in (Phase.COUNTDOWN, Phase.ACTIVE):
+            self._finish_exercise(skipped=self.session.count == 0)
 
     # --- Estado --------------------------------------------------------------
-    def _reset_game(self) -> None:
+    def _reset_game(self, rewind: bool = True) -> None:
+        if rewind and self.is_video:
+            self.camera.rewind()
+            self._last_frame_id = None
+            self._pose = None
+            self._video_end_handled = False
         self.phase = Phase.MENU
         self.index = 0
         self.sessions: list[ExerciseSession] = []
         self.saved_path: Path | None = None
         self.state = TrackerState()
         self.feedback: Feedback | None = None
-        self._phase_start = time.monotonic()
+        self._phase_start = self._now()
         self._ready_since: float | None = None
 
     @property
@@ -87,7 +121,7 @@ class Game:
 
     def _go(self, phase: Phase) -> None:
         self.phase = phase
-        self._phase_start = time.monotonic()
+        self._phase_start = self._now()
         self._ready_since = None
 
     def _start_exercise(self, index: int) -> None:
@@ -99,11 +133,16 @@ class Game:
 
     def _finish_exercise(self, skipped: bool = False) -> None:
         if self.phase is Phase.ACTIVE:
-            self.session.duration = time.monotonic() - self._phase_start
+            self.session.duration = self._now() - self._phase_start
         self.session.skipped = skipped
         self._go(Phase.EXERCISE_RESULT)
 
     def _next(self) -> None:
+        if self.video_ended:
+            # Sin más vídeo no se pueden hacer los ejercicios que faltan: se saltan
+            for i in range(self.index + 1, len(self.exercises)):
+                self.sessions.append(ExerciseSession(self.exercises[i], skipped=True))
+            self.index = len(self.exercises) - 1
         if self.index + 1 < len(self.exercises):
             self._start_exercise(self.index + 1)
         else:
@@ -168,7 +207,8 @@ class Game:
         draw_skeleton(c, pose, ex if live else None, self.state if live else None)
 
         if self.phase is Phase.MENU:
-            draw_menu(c, self.exercises, g.exercise_duration, g.target_reps)
+            draw_menu(c, self.exercises, g.exercise_duration, g.target_reps,
+                      Path(self.camera.source).name if self.is_video else None)
         elif self.phase is Phase.INSTRUCTIONS:
             frac = 0.0 if self._ready_since is None else (now - self._ready_since) / g.ready_hold_seconds
             draw_instructions(c, ex, self.index, len(self.exercises), self.state, min(frac, 1.0))
@@ -182,6 +222,9 @@ class Game:
             draw_exercise_result(c, self.session, self.index, len(self.exercises))
         elif self.phase is Phase.SUMMARY:
             draw_summary(c, self.sessions, self.saved_path)
+        if self.is_video and self.phase is not Phase.MENU:
+            draw_video_status(c, self.camera.position, self.camera.duration,
+                              self.camera.paused, self.camera.ended, show_hint=live)
         return c.finish()
 
     # --- Teclado -------------------------------------------------------------
@@ -199,11 +242,17 @@ class Game:
         if key == ord("r"):
             self._reset_game()
             return
+        if key == ord("p"):
+            if self.is_video and self.phase is not Phase.MENU:
+                self.camera.toggle_pause()
+            return
 
         advance = key in KEY_ENTER or key == KEY_SPACE
         skip = key == ord("n")
         if self.phase is Phase.MENU and advance:
             self.sessions = []
+            if self.is_video:
+                self.camera.play()
             self._start_exercise(0)
         elif self.phase is Phase.INSTRUCTIONS:
             if advance:
@@ -217,10 +266,24 @@ class Game:
         elif self.phase is Phase.SUMMARY and advance:
             self._reset_game()
 
+    # --- Ratón ---------------------------------------------------------------
+    def _on_mouse(self, event, x, y, flags, param) -> None:
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self._pending_click = True     # Un clic equivale a ENTER (ver run())
+
     # --- Bucle ---------------------------------------------------------------
+    def _window_size(self) -> tuple[int, int]:
+        cam = self.settings.camera
+        if not self.is_video:
+            return cam.width, cam.height
+        w, h = self.camera.frame_size
+        scale = min(cam.width / w, cam.height / h, 1.0)   # Cabe en la resolución pedida
+        return int(w * scale), int(h * scale)
+
     def run(self) -> None:
         cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self.window, self.settings.camera.width, self.settings.camera.height)
+        cv2.resizeWindow(self.window, *self._window_size())
+        cv2.setMouseCallback(self.window, self._on_mouse)
         try:
             while self._running:
                 frame = self.camera.read()
@@ -228,13 +291,27 @@ class Game:
                     if (cv2.waitKey(10) & 0xFF) == KEY_ESC:
                         break
                     continue
-                now = time.monotonic()
-                pose = self.detector.detect(frame)
-                self._update(pose, now)
-                cv2.imshow(self.window, self._draw(frame, pose, now))
+                now = self._now()
+                fresh = self.camera.frame_id != self._last_frame_id
+                if fresh:
+                    # Sólo se detecta y se actualiza con frames nuevos (no en pausa)
+                    self._last_frame_id = self.camera.frame_id
+                    self._pose = self.detector.detect(frame, self.camera.timestamp_ms())
+                    self._update(self._pose, now)
+                if self.video_ended and not self._video_end_handled:
+                    self._video_end_handled = True
+                    self._on_video_end()
+                cv2.imshow(self.window, self._draw(frame, self._pose, now))
 
-                # Un único waitKey por frame
-                self._handle_key(cv2.waitKey(1) & 0xFF)
+                # Un único waitKey por frame (más largo si no hay frames nuevos)
+                key = cv2.waitKey(1 if fresh else 30) & 0xFF
+                if self._pending_click:
+                    self._pending_click = False
+                    # El clic sólo actúa como ENTER en las pantallas "de botón", para que
+                    # un clic sin querer no corte el ejercicio en curso.
+                    if self.phase in (Phase.MENU, Phase.EXERCISE_RESULT, Phase.SUMMARY):
+                        key = KEY_ENTER[0]
+                self._handle_key(key)
                 if cv2.getWindowProperty(self.window, cv2.WND_PROP_VISIBLE) < 1:
                     break   # Ventana cerrada con la X
         finally:

@@ -3,6 +3,7 @@
 # Todos los argumentos se pasan a src/main.py, p. ej.:
 #   bash scripts/run.sh --source 1 --model lite
 #   bash scripts/run.sh --source http://192.168.1.20:8080/video
+#   bash scripts/run.sh --video demo.mp4 --exercises pushup
 
 PROJECT_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 PYTHON_BIN="$PROJECT_ROOT/.venv/bin/python"

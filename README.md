@@ -3,7 +3,7 @@
 **Práctica 2 de IPM (Interacción Persona-Máquina) mediante visión por computador.**
 
 MiEntrenadorPersonal es un **juego serio** (*serious game*) del ámbito de la salud. Usa la cámara del
-portátil o del móvil y el modelo **MediaPipe Pose Landmarker** para detectar los 33 puntos del
+portátil o del móvil (o un **vídeo grabado**) y el modelo **MediaPipe Pose Landmarker** para detectar los 33 puntos del
 cuerpo, y guía al usuario en tres ejercicios de fuerza con su propio peso:
 
 1. **Dominada**
@@ -15,7 +15,8 @@ comparando el movimiento del usuario con una pose de reposo, una pose de máximo
 trayectoria de referencia entre ambas. Durante el ejercicio da consejos en tiempo real ("mantén el
 cuerpo recto", "baja más", etc.). Al terminar guarda un historial en JSON.
 
-> Requisito de uso: **cámara estática** (apoyada, sin moverse durante el ejercicio).
+> Requisito de uso: **cámara estática** (apoyada, sin moverse durante el ejercicio). Vale igual
+> para grabar un vídeo y pasárselo al juego con `--video` (ver [Jugar con un vídeo grabado](#jugar-con-un-vídeo-grabado)).
 
 Basado en el código de ejemplo de la asignatura: <https://github.com/CarloHSUA/IPM/>, un juego
 de tocar círculos con las manos usando MediaPipe.
@@ -59,7 +60,7 @@ de tocar círculos con las manos usando MediaPipe.
 |-----------|---------|
 | **Python 3.11 o 3.12** | **Obligatorio.** `jax`, `scipy` y `contourpy` (versiones fijadas) exigen ≥ 3.11 y `mediapipe 0.10.21` no tiene ruedas para 3.13+. Los scripts buscan automáticamente `python3.12` o `python3.11` |
 | Módulo `venv` | En Ubuntu/Debian: `sudo apt install python3.12-venv` (o `python3-venv`) |
-| Cámara | Webcam o móvil con una app que emita la cámara por red (ver [Cámara del móvil](#cámara-del-móvil)) |
+| Cámara o vídeo | Webcam, móvil con una app que emita la cámara por red (ver [Cámara del móvil](#cámara-del-móvil)) o un vídeo grabado (ver [Jugar con un vídeo grabado](#jugar-con-un-vídeo-grabado)) |
 | Conexión a internet | Sólo en la instalación (paquetes pip y modelos `.task`, ~46 MB los tres) |
 | Sistema operativo | Linux y macOS (`scripts/*.sh`) y Windows (`scripts\*.bat`). Probado en Ubuntu 24.04 con Python 3.12 |
 
@@ -119,13 +120,15 @@ Si el modelo no existe, `main.py` lo descarga automáticamente.
 
 | Opción | Por defecto | Descripción |
 |--------|-------------|-------------|
-| `--source X` | `0` | Índice de webcam (`0`, `1`…) o URL de stream (cámara del móvil) |
+| `--source X` | `0` | Índice de webcam (`0`, `1`…), URL de stream (cámara del móvil) o ruta de un vídeo |
+| `--video ARCHIVO` | — | Juega con un vídeo grabado en vez de la cámara (`.mp4`, `.avi`, `.mov`…) |
 | `--model {lite,full,heavy}` | `full` | `lite` es más rápido (equipos lentos) y `heavy` más preciso |
 | `--exercises ...` | `pullup pushup bulgarian_squat` | Ejercicios y orden |
 | `--reps N` | `10` | Repeticiones objetivo por ejercicio (termina al alcanzarlas) |
 | `--duration S` | `60` | Segundos máximos por ejercicio |
 | `--width W --height H` | `1280 720` | Resolución pedida a la webcam |
-| `--no-mirror` | — | No mostrar la imagen en espejo |
+| `--no-mirror` | — | No mostrar la imagen en espejo (por defecto sólo se espeja la cámara, no los vídeos) |
+| `--mirror` | — | Espejar también un vídeo grabado |
 | `--no-download` | — | No descargar el modelo si falta (da error) |
 | `--no-save` | — | No guardar resultados en `results/` |
 
@@ -146,6 +149,48 @@ pasa la URL del vídeo:
 bash scripts/run.sh --source http://192.168.1.20:8080/video     # IP Webcam
 bash scripts/run.sh --source http://192.168.1.20:4747/video     # DroidCam
 ```
+
+### Jugar con un vídeo grabado
+
+En vez de la cámara se le puede pasar un vídeo ya grabado. **El juego funciona exactamente igual
+que en vivo**: se abre la ventana, se pulsa `ENTER` y la persona del vídeo sigue las indicaciones
+de la pantalla (ponerse en reposo, esperar la cuenta atrás, hacer las repeticiones). Sirve, por
+ejemplo, para el vídeo de demostración de la práctica.
+
+```bash
+bash scripts/run.sh --video demo.mp4 --exercises pushup               # sólo flexiones
+bash scripts/run.sh --video demo.mp4                                  # los tres ejercicios seguidos
+scripts\run.bat --video demo.mp4 --exercises pushup bulgarian_squat   # Windows
+```
+
+- El vídeo se queda **en pausa en el menú** (se ve el primer frame) y **empieza al pulsar
+  `ENTER`** (o hacer clic en la ventana).
+- Se reproduce a su **velocidad real**. Si el equipo no llega a procesar todos los frames, se
+  saltan frames para no retrasarse, igual que pasaría con la cámara.
+- El **reloj del juego es el del vídeo**: la cuenta atrás, el tiempo del ejercicio y el tempo de
+  cada repetición son exactos aunque el equipo vaya lento.
+- `P` **pausa / reanuda** el vídeo. En pausa el juego también se congela (el tiempo no corre).
+- Arriba a la derecha se ve la posición del vídeo (`VÍDEO 0:12 / 1:05`).
+- Cuando **se acaba el vídeo**, se cierra el ejercicio en curso con lo conseguido. Los ejercicios
+  que falten se marcan como saltados y se llega al resumen. Si se acaba durante las
+  instrucciones, pulsa `N` para saltar.
+- `R` o "jugar otra vez" en el resumen **rebobinan el vídeo** y vuelven al menú.
+- Por defecto el vídeo **no se espeja** (se ve tal cual se grabó); `--mirror` lo espeja.
+
+**Cómo grabar el vídeo:**
+
+1. Cámara quieta y colocada como dice la [tabla de colocación](#colocación-para-cada-ejercicio)
+   (de lado para la flexión y la sentadilla búlgara), con el cuerpo entero en el encuadre y buena luz.
+2. Empieza a grabar unos segundos antes de colocarte: en el juego, pulsar `ENTER` en el menú
+   arranca el vídeo desde el principio.
+3. Sigue el flujo del juego: colócate en **reposo** y quédate quieto ~2 s (el juego necesita
+   1,5 s de reposo para empezar), espera los **3 s de cuenta atrás** y haz las repeticiones.
+   Como referencia puedes ejecutar el juego con la cámara mientras grabas con el móvil, y así
+   ves las indicaciones en tiempo real.
+4. Si grabas varios ejercicios en el mismo vídeo, hazlos en el orden de `--exercises`. Entre uno
+   y otro, el juego espera en la pantalla de resultado hasta que pulsas `ENTER`, y el vídeo sigue
+   corriendo mientras tanto: deja unos segundos de margen o pulsa `P` para pausar. Si no, es más
+   cómodo grabar **un vídeo por ejercicio**.
 
 ---
 
@@ -186,9 +231,11 @@ MENÚ ──ENTER──▶ ┌─ por cada ejercicio ─────────
 | Tecla | Acción |
 |-------|--------|
 | `ENTER` / `ESPACIO` | Empezar / continuar / terminar el ejercicio actual |
+| Clic en la ventana | Igual que `ENTER` en el menú, el resultado y el resumen (no corta un ejercicio en curso) |
+| `P` | Pausar / reanudar el vídeo (sólo con `--video`) |
 | `N` | Saltar ejercicio |
 | `F` | Pantalla completa |
-| `R` | Volver al menú (reinicia la partida) |
+| `R` | Volver al menú (reinicia la partida; con un vídeo, lo rebobina) |
 | `ESC` / `Q` / cerrar ventana | Salir |
 
 ### Colocación para cada ejercicio
@@ -344,7 +391,7 @@ IPM_Prac_2/
     ├── main.py                 # Punto de entrada: argumentos, modelo, cámara, detector y juego
     ├── config.py               # Rutas absolutas y todos los parámetros
     ├── vision/                 # Entrada de vídeo y detección de la pose
-    │   ├── camera.py           #   Webcam o stream URL, espejo, control de fallos
+    │   ├── camera.py           #   Webcam, stream URL o vídeo grabado; espejo, control de fallos
     │   ├── models.py           #   Descarga atómica y localización de los modelos
     │   ├── detector.py         #   Envoltorio del Pose Landmarker de MediaPipe
     │   └── pose.py             #   Landmarks, geometría y PoseFrame
@@ -401,7 +448,7 @@ config, vision.pose ◀── exercises ◀── analysis.scoring ◀── ana
 |-----------------|---------|-----------------|
 | `Settings`, `CameraConfig`, `ModelConfig`, `GameConfig`, `ScoringConfig` | `config.py` | Parámetros (dataclasses) y la instancia única `settings` |
 | `ensure_model`, `download_model` | `vision/models.py` | Devuelve la ruta absoluta del modelo; descarga a `.part` y renombra (atómico) |
-| `Camera` | `vision/camera.py` | `read()` → frame o `None`; lanza `RuntimeError` tras N fallos seguidos |
+| `Camera` | `vision/camera.py` | `read()` → frame o `None`; lanza `RuntimeError` tras N fallos seguidos. Con un vídeo: `play()`, `pause()`, `rewind()`, `clock()` (reloj del vídeo) y `ended` |
 | `PoseDetector` | `vision/detector.py` | `detect(frame)` → `PoseFrame` o `None` |
 | `PoseFrame` | `vision/pose.py` | Landmarks de un frame; `angle(a, b, c)` en 3D |
 | `Landmark`, `side_landmark`, `POSE_CONNECTIONS` | `vision/pose.py` | Índices de los 33 puntos y conexiones del esqueleto |
@@ -547,7 +594,11 @@ Qué comprueban:
 - una repetición rápida, a tirones o con mala técnica puntúa al menos 10 puntos menos y da el
   consejo adecuado;
 - la sesión completa con una flexión sintética da 2 repeticiones, 1 incompleta y el JSON
-  guardado.
+  guardado;
+- con un archivo de vídeo: empieza en pausa, avanza al darle a play, el reloj se congela en
+  pausa, detecta el final y se rebobina;
+- el juego con un vídeo: arranca el vídeo con `ENTER`, la pausa congela la cuenta atrás, al
+  acabarse el vídeo cierra el ejercicio y salta los que faltan, y "jugar otra vez" lo rebobina.
 
 ---
 
@@ -607,6 +658,8 @@ cachés y `.task`: el receptor lo despliega con `scripts/dependencies.sh` o `.ba
 | Va lento | `--model lite` y/o `--width 640 --height 480` |
 | No cuenta repeticiones | Mira el aviso de la pantalla (visibilidad / postura). Colócate como dice la tabla de colocación; que se vea todo el cuerpo necesario y haya buena luz |
 | Cuenta repeticiones que no lo son, o no llega al máximo | Ajusta `rest` / `peak` del ejercicio o `peak_threshold` (sección 8) |
+| `No se pudo abrir el vídeo` | Comprueba la ruta. Si el formato no lo lee OpenCV, conviértelo a `.mp4` (H.264), p. ej. `ffmpeg -i entrada.mov salida.mp4` |
+| Con un vídeo no empieza el ejercicio | La persona del vídeo debe estar en reposo ~1,5 s durante las instrucciones; si no, pulsa `ENTER` para empezar la cuenta atrás a mano |
 | Avisos de Qt / Wayland en la consola (Linux) | Son inofensivos; si la ventana no aparece, prueba `QT_QPA_PLATFORM=xcb bash scripts/run.sh` |
 | Mensajes `W0000` / `INFO: Created TensorFlow Lite XNNPACK delegate` | Son logs normales de MediaPipe |
 
@@ -629,7 +682,10 @@ cachés y `.task`: el receptor lo despliega con `scripts/dependencies.sh` o `.ba
 - **UI:** dibuja siempre a través de `Canvas` en unidades de diseño (alto = 720). El texto se
   encola y se pinta en `Canvas.finish()`. No uses `cv2.putText`, porque no soporta tildes.
 - **Bucle:** un único `cv2.waitKey(1)` por frame, en `Game.run()`. Los timestamps del detector
-  deben ser estrictamente crecientes (ya gestionado en `PoseDetector`).
+  deben ser estrictamente crecientes (ya gestionado en `PoseDetector`, también al rebobinar un vídeo).
+- **Reloj:** usa siempre `Game._now()` y no `time.monotonic()`: con un vídeo es el reloj del
+  vídeo (se congela en pausa). Sólo se detecta y se llama a `_update()` con frames nuevos
+  (`Camera.frame_id`).
 - **Sin cámara:** para probar cambios, usa o amplía `tests/test_logic.py`. `Game._update()`,
   `Game._draw()` y `Game._handle_key()` se pueden llamar directamente con poses sintéticas y un
   reloj simulado (ver `TestGameFlow`).
