@@ -125,6 +125,9 @@ class Canvas:
         self.W = self.w / self.s          # Ancho en unidades de diseño
         self.H = DESIGN_HEIGHT
         self._texts: list[TextItem] = []
+        # Botones dibujados en este frame: (acción, rectángulo en píxeles). Ver ui/widgets.py
+        self.buttons: list[tuple[str, tuple[int, int, int, int]]] = []
+        self.mouse: tuple[int, int] | None = None      # Posición del ratón (píxeles)
 
     # --- Conversión de unidades ----------------------------------------------
     def px(self, v: float) -> int:
@@ -168,6 +171,24 @@ class Canvas:
     def text_width(self, text: str, size: float = 26, bold: bool = False) -> float:
         """Ancho del texto en unidades de diseño."""
         return self.renderer.font(self.px(size), bold).getlength(text) / self.s
+
+    def polyline(self, points, color, thickness: float = 2, dashed: bool = False) -> None:
+        """Línea poligonal en unidades de diseño (discontinua si dashed)."""
+        pts = np.array([self.pt(x, y) for x, y in points], dtype=np.int32)
+        t = max(self.px(thickness), 1)
+        if len(pts) < 2:
+            return
+        if not dashed:
+            cv2.polylines(self.frame, [pts], False, color, t, cv2.LINE_AA)
+            return
+        for i in range(0, len(pts) - 1, 2):
+            cv2.line(self.frame, tuple(map(int, pts[i])), tuple(map(int, pts[i + 1])), color, t, cv2.LINE_AA)
+
+    def hovered(self, x1, y1, x2, y2) -> bool:
+        if self.mouse is None:
+            return False
+        mx, my = self.mouse
+        return self.px(x1) <= mx <= self.px(x2) and self.px(y1) <= my <= self.px(y2)
 
     # --- Dibujo directo en píxeles (el esqueleto ya viene en píxeles) --------
     def line_px(self, p1, p2, color, thickness: int = 2) -> None:

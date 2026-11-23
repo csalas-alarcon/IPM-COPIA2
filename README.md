@@ -12,8 +12,17 @@ cuerpo, y guía al usuario en tres ejercicios de fuerza con su propio peso:
 
 El juego **cuenta las repeticiones automáticamente** y **puntúa la técnica de cada una (0-100)**
 comparando el movimiento del usuario con una pose de reposo, una pose de máximo esfuerzo y una
-trayectoria de referencia entre ambas. Durante el ejercicio da consejos en tiempo real ("mantén el
-cuerpo recto", "baja más", etc.). Al terminar guarda un historial en JSON.
+trayectoria de referencia entre ambas. Es la misma idea que los juegos de "dibuja un círculo":
+cuanto más se parece tu movimiento a la referencia, más puntos.
+
+- **Repetición de prueba (calibración):** antes de cada ejercicio el usuario hace una repetición
+  lenta y completa, y de ella salen *sus* poses de reposo y de máximo y *su* trayectoria. Las
+  repeticiones siguientes se comparan con esa referencia personal.
+- **Gráfica de cada repetición** frente a la de referencia, en vivo y al final del ejercicio.
+- Consejos en tiempo real ("mantén el cuerpo recto", "baja más"…), sonidos e **historial** de
+  partidas con su evolución.
+- Interfaz con **botones** (ratón) además del teclado, selector de **cámara o vídeo** y de
+  ejercicios en el menú, y opción de **grabar la ventana** en un `.mp4`.
 
 > Requisito de uso: **cámara estática** (apoyada, sin moverse durante el ejercicio). Vale igual
 > para grabar un vídeo y pasárselo al juego con `--video` (ver [Jugar con un vídeo grabado](#jugar-con-un-vídeo-grabado)).
@@ -62,6 +71,8 @@ de tocar círculos con las manos usando MediaPipe.
 | Módulo `venv` | En Ubuntu/Debian: `sudo apt install python3.12-venv` (o `python3-venv`) |
 | Cámara o vídeo | Webcam, móvil con una app que emita la cámara por red (ver [Cámara del móvil](#cámara-del-móvil)) o un vídeo grabado (ver [Jugar con un vídeo grabado](#jugar-con-un-vídeo-grabado)) |
 | Conexión a internet | Sólo en la instalación (paquetes pip y modelos `.task`, ~46 MB los tres) |
+| Opcional: sonido | Funciona tal cual en Windows y macOS. En Linux: `sudo apt install libportaudio2` (o tener `paplay`/`aplay`). Sin audio, el juego funciona igual |
+| Opcional: explorador de archivos | Para el botón "Buscar en el ordenador…". En Windows y macOS viene con Python. En Linux: `sudo apt install python3.12-tk` (o `python3-tk`) |
 | Sistema operativo | Linux y macOS (`scripts/*.sh`) y Windows (`scripts\*.bat`). Probado en Ubuntu 24.04 con Python 3.12 |
 
 ---
@@ -129,6 +140,10 @@ Si el modelo no existe, `main.py` lo descarga automáticamente.
 | `--width W --height H` | `1280 720` | Resolución pedida a la webcam |
 | `--no-mirror` | — | No mostrar la imagen en espejo (por defecto sólo se espeja la cámara, no los vídeos) |
 | `--mirror` | — | Espejar también un vídeo grabado |
+| `--start S` | `0` | Con un vídeo: empezar en el segundo `S` (para saltarse el principio) |
+| `--no-calibrate` | — | Sin repetición de prueba: usar las referencias estándar (también se cambia en el menú) |
+| `--record [ARCHIVO]` | — | Grabar la ventana en un `.mp4` (por defecto `results/grabacion_*.mp4`). También con la tecla `G` |
+| `--no-sound` | — | Sin efectos de sonido |
 | `--no-download` | — | No descargar el modelo si falta (da error) |
 | `--no-save` | — | No guardar resultados en `results/` |
 
@@ -137,7 +152,12 @@ Ejemplos:
 ```bash
 bash scripts/run.sh --model lite
 bash scripts/run.sh --exercises pushup bulgarian_squat --reps 8 --duration 45
+bash scripts/run.sh --video videos/flexiones.mp4 --exercises pushup --start 3 --record
 ```
+
+Casi todo se puede elegir también **desde el menú**, sin escribir opciones: la fuente (cámara
+o vídeo), los ejercicios y si se hace la repetición de prueba. Si no hay cámara, el juego
+arranca igual y pide abrir un vídeo.
 
 ### Cámara del móvil
 
@@ -163,8 +183,15 @@ bash scripts/run.sh --video demo.mp4                                  # los tres
 scripts\run.bat --video demo.mp4 --exercises pushup bulgarian_squat   # Windows
 ```
 
+**Sin terminal:** lanza el juego sin opciones (`bash scripts/run.sh`, o doble clic en
+`scripts\run.bat`) y en el menú pulsa **Abrir vídeo… (V)**. Aparecen los vídeos de la carpeta
+[`videos/`](videos/) del proyecto (cópialos ahí) y un botón **Buscar en el ordenador…** que abre
+el explorador de archivos. Luego elige los ejercicios y pulsa **EMPEZAR**.
+
 - El vídeo se queda **en pausa en el menú** (se ve el primer frame) y **empieza al pulsar
-  `ENTER`** (o hacer clic en la ventana).
+  EMPEZAR** (`ENTER` o clic). Con `--start 5` empieza en el segundo 5.
+- Los vídeos verticales (del móvil) se centran sobre un fondo oscuro, y los muy grandes (4K) se
+  reducen, para que la interfaz quepa y el juego vaya fluido.
 - Se reproduce a su **velocidad real**. Si el equipo no llega a procesar todos los frames, se
   saltan frames para no retrasarse, igual que pasaría con la cámara.
 - El **reloj del juego es el del vídeo**: la cuenta atrás, el tiempo del ejercicio y el tempo de
@@ -184,13 +211,19 @@ scripts\run.bat --video demo.mp4 --exercises pushup bulgarian_squat   # Windows
 2. Empieza a grabar unos segundos antes de colocarte: en el juego, pulsar `ENTER` en el menú
    arranca el vídeo desde el principio.
 3. Sigue el flujo del juego: colócate en **reposo** y quédate quieto ~2 s (el juego necesita
-   1,5 s de reposo para empezar), espera los **3 s de cuenta atrás** y haz las repeticiones.
+   1,5 s de reposo para empezar), espera los **3 s de cuenta atrás**, haz **1 repetición de
+   prueba lenta y completa** (la calibración; si la desactivas, sáltate este paso), vuelve al
+   reposo un momento y haz las repeticiones.
    Como referencia puedes ejecutar el juego con la cámara mientras grabas con el móvil, y así
    ves las indicaciones en tiempo real.
 4. Si grabas varios ejercicios en el mismo vídeo, hazlos en el orden de `--exercises`. Entre uno
    y otro, el juego espera en la pantalla de resultado hasta que pulsas `ENTER`, y el vídeo sigue
    corriendo mientras tanto: deja unos segundos de margen o pulsa `P` para pausar. Si no, es más
    cómodo grabar **un vídeo por ejercicio**.
+
+**Para la presentación:** `--record` (o la tecla `G`) graba la ventana del juego en
+`results/grabacion_*.mp4` mientras juegas. Si el equipo va lento al grabar la pantalla, puedes
+poner esa grabación en su lugar. Se abre con VLC o cualquier reproductor que lea MPEG-4.
 
 ---
 
@@ -199,44 +232,72 @@ scripts\run.bat --video demo.mp4 --exercises pushup bulgarian_squat   # Windows
 ### Flujo
 
 ```
-MENÚ ──ENTER──▶ ┌─ por cada ejercicio ─────────────────────────────────────────────┐
-                │ INSTRUCCIONES ──(reposo mantenido 1,5 s o ENTER)──▶ CUENTA ATRÁS │
-                │      │                                                3 s         │
-                │      N (saltar)                                       ▼          │
-                │      ▼                          ACTIVO (hasta 10 reps o 60 s)     │
-                │ RESULTADO ◀──────────────────────────────┘                        │
-                └───────┬───────────────────────────────────────────────────────────┘
-                        ▼
-                    RESUMEN (puntos totales, se guarda el JSON) ──ENTER──▶ MENÚ
+           ┌── SELECTOR DE VÍDEO (V)
+MENÚ ──────┤
+  │        └── HISTORIAL (H)
+  │ EMPEZAR
+  ▼
+┌─ por cada ejercicio ───────────────────────────────────────────────────────────┐
+│ INSTRUCCIONES ──(reposo mantenido 1,5 s o ENTER)──▶ CUENTA ATRÁS (3 s)        │
+│      │                                                  │                     │
+│      N (saltar)                                          ▼                     │
+│      │                     REPETICIÓN DE PRUEBA (si la calibración está activa)│
+│      │                       1 rep lenta → tu reposo, tu máximo, tu trayectoria│
+│      │                       (ENTER = usar la referencia estándar)             │
+│      │                                                  ▼                     │
+│      ▼                                   ACTIVO (hasta 10 reps o 60 s)         │
+│ RESULTADO (con la gráfica de tu mejor repetición) ◀─────┘                      │
+└───────┬────────────────────────────────────────────────────────────────────────┘
+        ▼
+    RESUMEN (puntos totales, comparación con la partida anterior, se guarda el JSON)
 ```
 
-1. **Menú**: pulsa `ENTER`.
+1. **Menú**: elige la **fuente** (cámara o vídeo), los **ejercicios** (casillas) y si se hace
+   la **repetición de prueba**, y pulsa **EMPEZAR**. Desde aquí también se abre el **historial**.
 2. **Instrucciones**: se explica el ejercicio y dónde poner la cámara. Colócate en la **posición
    de reposo**. Cuando el sistema te detecta en ella, un anillo se llena durante 1,5 s y empieza
    solo (o pulsa `ENTER`).
-3. **Cuenta atrás** de 3 s.
-4. **Ejercicio**. En pantalla aparecen:
+3. **Cuenta atrás** de 3 s, con pitidos.
+4. **Repetición de prueba** (si está activada): haz 1 repetición lenta y completa. El juego
+   guarda tu reposo, tu máximo y cómo te has movido, y te avisa con "¡Referencia guardada!".
+   Si no llegas al menos a la mitad del recorrido estándar, te pide repetirla. Tienes 20 s;
+   si no, o si pulsas `ENTER`, se usa la referencia estándar.
+5. **Ejercicio**. En pantalla aparecen:
    - repeticiones / objetivo, tiempo restante y puntos;
    - una **barra vertical de progreso** reposo → máximo, con las marcas de los umbrales;
    - el esqueleto, con las articulaciones medidas resaltadas (azul = reposo, verde = máximo);
-   - la puntuación de la **última repetición** desglosada (rango, trayectoria, técnica);
+   - la puntuación de la **última repetición** desglosada (rango, trayectoria, técnica) y su
+     **gráfica** frente a la referencia (línea discontinua);
    - **avisos en vivo** (técnica, postura incorrecta, persona fuera de cámara);
    - tras cada repetición, un mensaje ("¡Perfecta!", "+82", "Incompleta"…) con consejos.
-5. **Resultado del ejercicio**: repeticiones, puntos, medias por componente y los consejos más
-   repetidos.
-6. **Resumen**: tabla de los tres ejercicios y la puntuación total.
+6. **Resultado del ejercicio**: repeticiones, puntos, medias por componente, los consejos más
+   repetidos y la **gráfica de tu mejor repetición** (con las demás en gris) frente a la
+   referencia.
+7. **Resumen**: tabla de los ejercicios, la puntuación total y la diferencia con la partida
+   anterior.
+8. **Historial**: gráficas de los puntos y de la puntuación media de las últimas partidas, y
+   una tabla con las más recientes.
 
 ### Controles
 
+Todas las pantallas tienen **botones** que se pulsan con el ratón; cada botón indica entre
+paréntesis su tecla.
+
 | Tecla | Acción |
 |-------|--------|
-| `ENTER` / `ESPACIO` | Empezar / continuar / terminar el ejercicio actual |
-| Clic en la ventana | Igual que `ENTER` en el menú, el resultado y el resumen (no corta un ejercicio en curso) |
-| `P` | Pausar / reanudar el vídeo (sólo con `--video`) |
+| `ENTER` / `ESPACIO` | Empezar / continuar / terminar el ejercicio actual / usar la referencia estándar |
+| `1`, `2`, `3` (menú) | Activar o desactivar cada ejercicio |
+| `C` / `V` (menú) | Usar la cámara / abrir un vídeo |
+| `K` (menú) | Activar o desactivar la repetición de prueba |
+| `H` (menú y resumen) | Historial |
+| `1`…`8` / `B` (selector de vídeo) | Elegir un vídeo de la lista / buscar en el ordenador |
+| `P` | Pausar / reanudar el vídeo (también con clic en el indicador del vídeo) |
+| `G` | Empezar / parar la grabación de la ventana |
 | `N` | Saltar ejercicio |
 | `F` | Pantalla completa |
 | `R` | Volver al menú (reinicia la partida; con un vídeo, lo rebobina) |
-| `ESC` / `Q` / cerrar ventana | Salir |
+| `ESC` | Volver (en el selector de vídeo y el historial) o salir |
+| `Q` / cerrar ventana | Salir |
 
 ### Colocación para cada ejercicio
 
@@ -282,6 +343,9 @@ landmarks), con un valor en **reposo** y otro en **máximo esfuerzo**:
   está elevado. Tiene histéresis (8 % de la longitud de la pierna) para que no parpadee.
 - **Suavizado:** EMA (media móvil exponencial) sobre los ángulos con α = 0.45 para reducir el
   ruido del detector.
+
+Esos son los valores **estándar**. Con la repetición de prueba se sustituyen por los del propio
+usuario (ver [6.6](#66-repetición-de-prueba-calibración)).
 
 ### 6.3 Progreso (0 = reposo, 1 = máximo)
 
@@ -368,6 +432,37 @@ En vivo, se avisa cuando una regla supera 0.6 en el frame actual.
 **Puntos del juego** = suma de las puntuaciones de las repeticiones: más repeticiones y con mejor
 técnica dan más puntos.
 
+### 6.6 Repetición de prueba (calibración)
+
+Antes de cada ejercicio, tras la cuenta atrás, el usuario hace una repetición lenta y completa
+([src/analysis/calibration.py](src/analysis/calibration.py)):
+
+1. **Reposo:** mediana de los ángulos mientras espera quieto en las instrucciones y en la cuenta
+   atrás.
+2. **Repetición:** se detecta con las referencias estándar, igual que el contador: empieza al
+   pasar `p > 0.25` y acaba al volver a `p ≤ 0.25`. Tiene que llegar al menos a `p ≥ 0.5`; si
+   se queda corta, se pide repetirla.
+3. **Máximo:** media de los ángulos en los frames de máximo progreso.
+4. **Comprobación por ángulo:** cada ángulo tiene que moverse en el mismo sentido que el
+   estándar y al menos un 40 % de su recorrido. Si no (p. ej. el hombro en una dominada mal
+   hecha), ese ángulo se queda con la referencia estándar y se avisa en pantalla. Si falla el
+   ángulo principal, se pide repetir.
+5. **Trayectoria de referencia:** la ida y la vuelta de la repetición se remuestrean, se fuerzan
+   monótonas (para quitar el ruido del detector) y se escalan de 0 a 1. Sustituyen al perfil
+   coseno ideal en la comparación de la [sección 6.5](#65-puntuación-de-cada-repetición-0-100).
+   Si una fase de un ángulo apenas se mueve, se usa el coseno.
+
+A partir de ahí el progreso, el rango y la trayectoria se miden respecto a **tu** reposo, **tu**
+máximo y **tu** forma de moverte. Si desactivas la calibración (menú o `--no-calibrate`), se
+usan las referencias estándar y el perfil coseno.
+
+### 6.7 Gráfica de la repetición
+
+Cada `RepScore` guarda dos curvas (40 puntos, ida y vuelta): `curve`, el progreso real con su
+profundidad, y `reference_curve`, la referencia con la que se ha comparado. Se dibujan en el HUD
+(última repetición) y en el resultado (mejor repetición, con las demás en gris). En el eje
+vertical, abajo es el reposo y arriba el máximo.
+
 ---
 
 ## 7. Arquitectura del código
@@ -379,7 +474,8 @@ IPM_Prac_2/
 ├── README.md
 ├── requirements.txt            # Dependencias fijadas (Python 3.11-3.12)
 ├── models/                     # Modelos .task descargados (no versionado)
-├── results/                    # Sesiones guardadas en JSON (no versionado)
+├── results/                    # Sesiones guardadas en JSON y grabaciones (no versionado)
+├── videos/                     # Vídeos para el selector del menú (los vídeos no se versionan)
 ├── scripts/
 │   ├── dependencies.sh / .bat  # Despliegue en equipo limpio: venv + requirements + modelos
 │   ├── run.sh / .bat           # Lanza src/main.py con el Python del .venv
@@ -399,15 +495,21 @@ IPM_Prac_2/
     │   ├── base.py             #   Clase base Exercise
     │   ├── pullup.py, pushup.py, bulgarian_squat.py
     │   └── catalog.py          #   Registro EXERCISES y build_exercises()
-    ├── analysis/               # Conteo y puntuación
+    ├── analysis/               # Conteo, puntuación y calibración
     │   ├── counter.py          #   RepCounter (máquina de estados) + ExerciseTracker (pipeline por frame)
-    │   └── scoring.py          #   Puntuación de cada rep y trayectoria de referencia
+    │   ├── scoring.py          #   Puntuación de cada rep y trayectoria de referencia
+    │   └── calibration.py      #   Calibrator: referencias a partir de la repetición de prueba
     ├── ui/                     # Interfaz
     │   ├── canvas.py           #   Paleta, lienzo escalable y texto Unicode
-    │   └── screens.py          #   Pantallas del juego
+    │   ├── widgets.py          #   Botones, casillas y gráficas
+    │   ├── screens.py          #   Pantallas del juego
+    │   ├── dialogs.py          #   Lista de vídeos y explorador de archivos (tkinter, en otro proceso)
+    │   ├── sound.py            #   Pitidos generados (sounddevice / winsound / paplay)
+    │   └── recorder.py         #   Grabación de la ventana en .mp4
     └── game/                   # Lógica del juego
-        ├── game.py             #   Fases y bucle principal
-        └── session.py          #   Resultados y guardado en JSON
+        ├── game.py             #   Fases, acciones (teclado y ratón) y bucle principal
+        ├── session.py          #   Resultados y guardado en JSON
+        └── history.py          #   Lectura del historial de partidas
 ```
 
 ### Flujo de datos por frame
@@ -429,9 +531,10 @@ ExerciseTracker.update()
                                         └─ score_repetition()  (analysis/scoring.py)
    │
    ▼
-Game._update()           avanza las fases y guarda las repeticiones en ExerciseSession
-Game._draw()             Canvas + screens.*  → cv2.imshow
-Game._handle_key()       un único cv2.waitKey por frame
+Game._update()           avanza las fases, calibra (Calibrator) y guarda las repeticiones en ExerciseSession
+Game._draw()             Canvas + screens.* (los botones se registran en Canvas.buttons) → cv2.imshow
+Game._handle_key()       un único cv2.waitKey por frame  ─┐
+Game._handle_click()     clic → botón bajo el ratón      ─┴─▶ Game._do(acción)
 ```
 
 ### Dependencias entre paquetes (sin ciclos)
@@ -439,7 +542,7 @@ Game._handle_key()       un único cv2.waitKey por frame
 ```
 config ◀── vision.models, vision.camera
 vision.pose ◀── vision.detector
-config, vision.pose ◀── exercises ◀── analysis.scoring ◀── analysis.counter ◀── ui ◀── game ◀── main
+config, vision.pose ◀── exercises ◀── analysis.scoring ◀── analysis.counter, analysis.calibration ◀── ui ◀── game ◀── main
 ```
 
 ### Clases principales
@@ -449,21 +552,28 @@ config, vision.pose ◀── exercises ◀── analysis.scoring ◀── ana
 | `Settings`, `CameraConfig`, `ModelConfig`, `GameConfig`, `ScoringConfig` | `config.py` | Parámetros (dataclasses) y la instancia única `settings` |
 | `ensure_model`, `download_model` | `vision/models.py` | Devuelve la ruta absoluta del modelo; descarga a `.part` y renombra (atómico) |
 | `Camera` | `vision/camera.py` | `read()` → frame o `None`; lanza `RuntimeError` tras N fallos seguidos. Con un vídeo: `play()`, `pause()`, `rewind()`, `clock()` (reloj del vídeo) y `ended` |
+| `NoSource`, `fit_frame` | `vision/camera.py` | Fuente vacía para arrancar sin cámara; adaptación de frames verticales o muy grandes |
 | `PoseDetector` | `vision/detector.py` | `detect(frame)` → `PoseFrame` o `None` |
 | `PoseFrame` | `vision/pose.py` | Landmarks de un frame; `angle(a, b, c)` en 3D |
 | `Landmark`, `side_landmark`, `POSE_CONNECTIONS` | `vision/pose.py` | Índices de los 33 puntos y conexiones del esqueleto |
-| `Exercise`, `FeatureSpec`, `Measurement` | `exercises/base.py` | Clase base: medición, normalización, progreso, utilidades de reglas |
+| `Exercise`, `FeatureSpec`, `Measurement` | `exercises/base.py` | Clase base: medición, normalización, progreso, utilidades de reglas. `set_reference()` / `reset_reference()` cambian entre referencias calibradas y estándar |
 | `PullUp`, `PushUp`, `BulgarianSquat` | `exercises/*.py` | Referencias, postura y reglas de cada ejercicio |
 | `EXERCISES`, `build_exercises` | `exercises/catalog.py` | Registro `clave → clase` |
 | `RepCounter`, `RepEvent` | `analysis/counter.py` | Máquina de estados REPOSO/MOVIENDO/PICO |
 | `ExerciseTracker`, `TrackerState` | `analysis/counter.py` | Pipeline por frame (medida → suavizado → progreso → postura → reglas → contador) |
 | `score_repetition`, `RepScore` | `analysis/scoring.py` | Puntuación y consejos de una repetición |
-| `trajectory_error`, `reference_trajectory` | `analysis/scoring.py` | Comparación alineada por fases con el perfil coseno |
+| `trajectory_error`, `reference_trajectory`, `build_profile` | `analysis/scoring.py` | Comparación alineada por fases con el perfil coseno o el calibrado |
+| `Calibrator`, `CalibrationResult` | `analysis/calibration.py` | Repetición de prueba → reposo, máximo y perfil del usuario |
 | `Canvas` | `ui/canvas.py` | Dibujo en "unidades de diseño" (alto 720) escaladas a cualquier resolución |
 | `TextRenderer` | `ui/canvas.py` | Texto con Pillow (tildes y eñes); una conversión BGR↔RGB por frame |
-| `draw_*` | `ui/screens.py` | Menú, instrucciones, cuenta atrás, HUD, resultado y resumen |
-| `Game`, `Phase` | `game/game.py` | Bucle principal y máquina de fases del juego |
+| `button`, `checkbox`, `draw_rep_chart`, `draw_line_chart` | `ui/widgets.py` | Botones clicables y gráficas |
+| `draw_*`, `MenuInfo`, `PickerInfo` | `ui/screens.py` | Menú, selector de vídeo, historial, instrucciones, cuenta atrás, repetición de prueba, HUD, resultado y resumen |
+| `Sound` | `ui/sound.py` | Efectos de sonido sin bloquear (y en silencio si no hay audio) |
+| `Recorder` | `ui/recorder.py` | Graba la ventana en `.mp4` a fps fijos según el reloj real |
+| `list_videos`, `ask_video_file` | `ui/dialogs.py` | Vídeos de `videos/` y explorador de archivos |
+| `Game`, `Phase` | `game/game.py` | Bucle principal y máquina de fases. `_do(acción)` es el único punto por el que pasan teclas y clics |
 | `ExerciseSession`, `save_sessions` | `game/session.py` | Resultados por ejercicio y guardado en JSON |
+| `load_history`, `HistoryEntry` | `game/history.py` | Partidas guardadas, para el historial y la comparación |
 
 ### Formato de los archivos
 
@@ -534,7 +644,10 @@ y reglas de cada ejercicio están en su archivo de [src/exercises/](src/exercise
 |-------|-----------|-------|-------------|
 | Rutas | `MODELS_DIR` | `<raíz>/models` | Se puede cambiar con la variable de entorno `POSE_GAME_MODELS_DIR` |
 | Rutas | `RESULTS_DIR` | `<raíz>/results` | Se puede cambiar con la variable de entorno `POSE_GAME_RESULTS_DIR` |
-| Cámara | `source`, `width`, `height`, `mirror` | `0`, 1280, 720, `True` | Fuente y resolución |
+| Rutas | `VIDEOS_DIR` | `<raíz>/videos` | Carpeta del selector de vídeo (`POSE_GAME_VIDEOS_DIR`) |
+| Cámara | `source`, `width`, `height` | `0`, 1280, 720 | Fuente y resolución (los frames más altos que `height` se reducen) |
+| Cámara | `mirror`, `mirror_video` | `True`, `False` | Espejo con la cámara / con un vídeo |
+| Cámara | `start_seconds` | 0 | Segundo en el que empieza un vídeo |
 | Modelo | `variant` | `full` | `lite` / `full` / `heavy` |
 | Modelo | `min_*_confidence` | 0.5 | Umbrales de MediaPipe |
 | Modelo | `use_world_landmarks` | `True` | Ángulos 3D |
@@ -542,13 +655,16 @@ y reglas de cada ejercicio están en su archivo de [src/exercises/](src/exercise
 | Juego | `ready_hold_seconds`, `ready_progress` | 1.5 s, 0.2 | Arranque automático en reposo |
 | Juego | `min_visibility` | 0.5 | Visibilidad mínima de las articulaciones |
 | Juego | `smoothing_alpha` | 0.45 | EMA (1 = sin suavizado) |
+| Juego | `calibrate`, `calibration_timeout` | `True`, 20 s | Repetición de prueba y tiempo para hacerla |
+| Juego | `calibration_min_progress`, `calibration_min_span` | 0.5, 0.4 | Profundidad mínima de la repetición de prueba y recorrido mínimo de cada ángulo (fracción del estándar) |
+| Juego | `sound`, `record_path`, `record_fps` | `True`, `None`, 30 | Sonido y grabación de la ventana |
 | Puntuación | `rest_threshold`, `peak_threshold`, `partial_threshold` | 0.25, 0.75, 0.45 | Conteo |
 | Puntuación | `weight_rom`, `weight_trajectory`, `weight_form` | 0.35, 0.35, 0.30 | Pesos (se normalizan) |
 | Puntuación | `trajectory_sensitivity`, `trajectory_noise_floor` | 6.0, 0.015 | Exigencia de la trayectoria |
 | Puntuación | `min_rep_seconds`, `max_rep_seconds` | 0.8, 8.0 | Tempo |
 
-**Calibración:** si al probar con cámara el juego no cuenta bien un ejercicio, ajusta primero
-`rest` / `peak` de sus `FeatureSpec`. En la consola se imprime cada repetición con su desglose,
+**Ajuste de las referencias estándar:** si al probar con cámara (sin repetición de prueba) el
+juego no cuenta bien un ejercicio, ajusta primero `rest` / `peak` de sus `FeatureSpec`. En la consola se imprime cada repetición con su desglose,
 lo que sirve de ayuda.
 
 ---
@@ -567,9 +683,12 @@ ilustrativos):
       "exercise": "pushup", "name": "Flexión", "skipped": false,
       "reps": 3, "partial_reps": 1, "points": 296,
       "average_score": 98.5, "best_score": 100.0, "duration_s": 12.4,
+      "calibrated": true,
+      "reference": {"rest": {"codo": 171.2}, "peak": {"codo": 98.4}},
       "repetitions": [
         {"total": 100.0, "rom": 1.0, "trajectory": 1.0, "form": 1.0, "tempo": 1.0,
-         "duration": 1.4, "feedback": []}
+         "duration": 1.4, "feedback": [],
+         "curve": [0.21, 0.27, "…", 0.24], "reference_curve": [0.21, 0.26, "…", 0.25]}
       ]
     }
   ]
@@ -598,7 +717,16 @@ Qué comprueban:
 - con un archivo de vídeo: empieza en pausa, avanza al darle a play, el reloj se congela en
   pausa, detecta el final y se rebobina;
 - el juego con un vídeo: arranca el vídeo con `ENTER`, la pausa congela la cuenta atrás, al
-  acabarse el vídeo cierra el ejercicio y salta los que faltan, y "jugar otra vez" lo rebobina.
+  acabarse el vídeo cierra el ejercicio y salta los que faltan, y "jugar otra vez" lo rebobina;
+- la calibración: aprende un reposo y un máximo personales, pide repetir una repetición de
+  prueba demasiado corta, deja en estándar un ángulo que no se mueve, y el perfil de una
+  repetición ideal coincide con el coseno;
+- el juego con repetición de prueba: instrucciones → cuenta atrás → prueba → ejercicio, con la
+  referencia personal guardada en el JSON; y que se puede saltar con la referencia estándar;
+- el menú (casillas, calibración, fuente, sin fuente no se empieza), el clic en un botón y que
+  todas las pantallas se dibujan en 16:9 y 4:3;
+- el historial, la grabación de la ventana, el sonido (en silencio), la adaptación de frames
+  verticales y `--start`.
 
 ---
 
@@ -610,7 +738,7 @@ Qué comprueban:
 ```
 
 El script quita tildes y espacios del nombre. Excluye `.venv/`, `models/`, `results/`, `.git/`,
-cachés y `.task`: el receptor lo despliega con `scripts/dependencies.sh` o `.bat`.
+cachés, `.task` y los vídeos de `videos/` (pesan mucho: entrégalos aparte si hace falta): el receptor lo despliega con `scripts/dependencies.sh` o `.bat`.
 
 ---
 
@@ -660,6 +788,11 @@ cachés y `.task`: el receptor lo despliega con `scripts/dependencies.sh` o `.ba
 | Cuenta repeticiones que no lo son, o no llega al máximo | Ajusta `rest` / `peak` del ejercicio o `peak_threshold` (sección 8) |
 | `No se pudo abrir el vídeo` | Comprueba la ruta. Si el formato no lo lee OpenCV, conviértelo a `.mp4` (H.264), p. ej. `ffmpeg -i entrada.mov salida.mp4` |
 | Con un vídeo no empieza el ejercicio | La persona del vídeo debe estar en reposo ~1,5 s durante las instrucciones; si no, pulsa `ENTER` para empezar la cuenta atrás a mano |
+| La repetición de prueba no se acepta ("Otra vez") | Tiene que llegar al menos a la mitad del recorrido estándar y volver al reposo. Si no se puede, pulsa `ENTER` para usar la referencia estándar, o desactívala en el menú (`K`) |
+| Puntúa demasiado alto con repeticiones cortas | La referencia es tu repetición de prueba: si fue corta, se compara con eso. Haz la prueba completa o desactiva la calibración |
+| `No hay salida de audio disponible` | En Linux: `sudo apt install libportaudio2`. El juego funciona igual sin sonido (`--no-sound` quita el aviso) |
+| "Buscar en el ordenador…" desactivado | Falta tkinter. En Linux: `sudo apt install python3.12-tk`. Mientras tanto, copia los vídeos en `videos/` |
+| La grabación `.mp4` no se abre | Ábrela con VLC (usa el códec MPEG-4 Part 2) |
 | Avisos de Qt / Wayland en la consola (Linux) | Son inofensivos; si la ventana no aparece, prueba `QT_QPA_PLATFORM=xcb bash scripts/run.sh` |
 | Mensajes `W0000` / `INFO: Created TensorFlow Lite XNNPACK delegate` | Son logs normales de MediaPipe |
 
@@ -686,9 +819,14 @@ cachés y `.task`: el receptor lo despliega con `scripts/dependencies.sh` o `.ba
 - **Reloj:** usa siempre `Game._now()` y no `time.monotonic()`: con un vídeo es el reloj del
   vídeo (se congela en pausa). Sólo se detecta y se llama a `_update()` con frames nuevos
   (`Camera.frame_id`).
+- **Acciones:** teclas y clics acaban en `Game._do(acción)`. Un botón nuevo se dibuja con
+  `widgets.button(c, "acción", ...)` y se trata en `_do()`; no hace falta tocar el ratón.
+- **Referencias:** no modifiques `rest_vector` / `peak_vector` a mano; usa
+  `Exercise.set_reference()` / `reset_reference()`. Cada partida empieza con las estándar.
 - **Sin cámara:** para probar cambios, usa o amplía `tests/test_logic.py`. `Game._update()`,
-  `Game._draw()` y `Game._handle_key()` se pueden llamar directamente con poses sintéticas y un
-  reloj simulado (ver `TestGameFlow`).
+  `Game._draw()`, `Game._handle_key()` y `Game._do()` se pueden llamar directamente con poses
+  sintéticas y un reloj simulado (ver `TestGameFlow` y `TestCalibratedGame`).
 - **Dependencias:** si se cambia `requirements.txt`, mantener la compatibilidad con Python
   3.11-3.12 y `numpy < 2` / `protobuf < 5` (restricciones de mediapipe 0.10.21).
-- **No versionar:** `.venv/`, `models/`, `results/`, `*.zip` (ya están en `.gitignore`).
+- **No versionar:** `.venv/`, `models/`, `results/`, `*.zip` y los vídeos de `videos/` (ya
+  están en `.gitignore`).

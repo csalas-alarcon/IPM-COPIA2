@@ -32,6 +32,8 @@ class ExerciseSession:
     partial_reps: int = 0
     skipped: bool = False
     duration: float = 0.0
+    calibrated: bool = False                 # ¿Se usaron las referencias de la repetición de prueba?
+    reference: dict | None = None            # {"rest": {feature: grados}, "peak": {...}}
 
     @property
     def count(self) -> int:
@@ -53,6 +55,10 @@ class ExerciseSession:
     def component_average(self, name: str) -> float:
         return float(np.mean([getattr(r, name) for r in self.reps])) if self.reps else 0.0
 
+    @property
+    def best_rep(self):
+        return max(self.reps, key=lambda r: r.total) if self.reps else None
+
     def top_feedback(self, n: int = 2) -> list[str]:
         c = Counter(msg for r in self.reps for msg in r.feedback)
         return [msg for msg, _ in c.most_common(n)]
@@ -68,6 +74,8 @@ class ExerciseSession:
             "average_score": round(self.average, 2),
             "best_score": round(self.best, 2),
             "duration_s": round(self.duration, 2),
+            "calibrated": self.calibrated,
+            "reference": self.reference,
             "repetitions": [r.to_dict() for r in self.reps],
         }
 

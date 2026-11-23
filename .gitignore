@@ -231,3 +231,7 @@ results/
 
 # Entregables generados
 *.zip
+
+# Vídeos de prueba / demostración (pesan mucho)
+videos/*
+!videos/LEEME.md

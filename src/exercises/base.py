@@ -10,6 +10,10 @@ la distancia a la cámara ni de la posición de la persona en el encuadre.
 
 El progreso se calcula según lo cerca que está la pose actual de cada
 referencia:   p = d(reposo) / (d(reposo) + d(máximo))
+
+Las referencias de cada clase son las "estándar". Con la calibración
+(repetición de prueba, ver analysis/calibration.py) se sustituyen por las del
+propio usuario con set_reference(); reset_reference() vuelve a las estándar.
 """
 
 # =============================================================================
@@ -68,14 +72,30 @@ class Exercise(ABC):
     def __init__(self) -> None:
         if not self.features:
             raise ValueError(f"{type(self).__name__} no define features")
-        self.rest_vector = np.array([f.rest for f in self.features], dtype=float)
-        self.peak_vector = np.array([f.peak for f in self.features], dtype=float)
-        span = self.peak_vector - self.rest_vector
-        if np.any(np.abs(span) < 1e-6):
-            raise ValueError("rest y peak deben ser distintos en cada feature")
-        self._span = span
+        self.default_rest = np.array([f.rest for f in self.features], dtype=float)
+        self.default_peak = np.array([f.peak for f in self.features], dtype=float)
         w = np.array([f.weight for f in self.features], dtype=float)
         self.weights = w / w.sum()
+        self.reset_reference()
+
+    # --- Poses de referencia (estándar o calibradas) -------------------------
+    def set_reference(self, rest: np.ndarray, peak: np.ndarray,
+                      profile: tuple[np.ndarray, np.ndarray] | None = None,
+                      calibrated: bool = True) -> None:
+        """Fija las poses de referencia (ángulos) y, opcionalmente, la trayectoria
+        de referencia (perfil de ida y de vuelta, ver analysis/scoring.py)."""
+        rest = np.array(rest, dtype=float)
+        peak = np.array(peak, dtype=float)
+        span = peak - rest
+        if np.any(np.abs(span) < 1e-6):
+            raise ValueError("rest y peak deben ser distintos en cada feature")
+        self.rest_vector, self.peak_vector, self._span = rest, peak, span
+        self.reference_profile = profile
+        self.calibrated = calibrated
+
+    def reset_reference(self) -> None:
+        """Vuelve a las referencias estándar del ejercicio."""
+        self.set_reference(self.default_rest, self.default_peak, None, calibrated=False)
 
     # --- Estado interno (p. ej. pierna adelantada en la sentadilla búlgara) --
     def reset(self) -> None:

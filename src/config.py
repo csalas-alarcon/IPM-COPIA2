@@ -33,6 +33,11 @@ MODELS_DIR: Path = Path(
 RESULTS_DIR: Path = Path(
     os.environ.get("POSE_GAME_RESULTS_DIR", PROJECT_ROOT / "results")
 ).expanduser().resolve()
+# Carpeta donde el juego busca vídeos para el selector del menú
+VIDEOS_DIR: Path = Path(
+    os.environ.get("POSE_GAME_VIDEOS_DIR", PROJECT_ROOT / "videos")
+).expanduser().resolve()
+VIDEO_EXTENSIONS: tuple[str, ...] = (".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg", ".wmv")
 
 
 # =============================================================================
@@ -88,8 +93,10 @@ class CameraConfig:
     source: int | str = 0
     width: int = 1280
     height: int = 720
-    mirror: bool = True              # Efecto espejo (más natural para el usuario)
+    mirror: bool = True              # Efecto espejo con la cámara (más natural para el usuario)
+    mirror_video: bool = False       # Efecto espejo con un vídeo grabado (se ve tal cual)
     max_failed_reads: int = 60       # Lecturas fallidas seguidas antes de abortar
+    start_seconds: float = 0.0       # Con un vídeo: segundo desde el que empieza
 
 
 @dataclass
@@ -122,6 +129,14 @@ class GameConfig:
     feedback_seconds: float = 2.5    # Tiempo que se muestra el mensaje tras una rep
     save_results: bool = True
     window_name: str = "Pose Trainer"
+    sound: bool = True               # Pitidos de cuenta atrás, repeticiones...
+    record_path: str | None = None   # Grabar lo que muestra la ventana en este .mp4
+    record_fps: float = 30.0
+    # --- Calibración: repetición de prueba antes de cada ejercicio -----------
+    calibrate: bool = True
+    calibration_timeout: float = 20.0      # s para hacer la repetición de prueba
+    calibration_min_progress: float = 0.5  # Profundidad mínima (respecto a la referencia estándar)
+    calibration_min_span: float = 0.4      # Recorrido mínimo de cada ángulo (fracción del estándar)
 
 
 @dataclass

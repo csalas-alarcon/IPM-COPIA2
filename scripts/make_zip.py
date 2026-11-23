@@ -33,6 +33,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXCLUDED_DIRS = {".venv", "venv", "mp_env", ".git", "models", "results", "__pycache__",
                  ".pytest_cache", ".mypy_cache", ".ruff_cache", ".idea", ".vscode"}
 EXCLUDED_SUFFIXES = {".task", ".part", ".pyc", ".pyo", ".zip"}
+# Los vídeos de videos/ pesan mucho: no se meten en el .zip (se entregan aparte)
+VIDEO_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg", ".wmv"}
 
 
 # =============================================================================
@@ -47,6 +49,8 @@ def iter_files(root: Path):
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root)
         if any(part in EXCLUDED_DIRS for part in rel.parts):
+            continue
+        if rel.parts[0] == "videos" and path.suffix.lower() in VIDEO_SUFFIXES:
             continue
         if path.is_file() and path.suffix not in EXCLUDED_SUFFIXES:
             yield path, rel

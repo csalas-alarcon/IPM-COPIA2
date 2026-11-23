@@ -11,6 +11,13 @@ reproduce a su velocidad real (si el equipo va lento, se saltan frames para no
 retrasarse) y el reloj del juego es el del propio vídeo, de modo que las
 duraciones, la cuenta atrás y el tempo de las repeticiones son exactos. El
 vídeo empieza en pausa (primer frame) y se controla con play / pause / rewind.
+
+Los frames se adaptan para la interfaz: si son más altos que la resolución
+pedida se reducen, y si son verticales (vídeo del móvil) se centran sobre un
+fondo oscuro de 16:9. La detección se hace sobre ese mismo frame.
+
+NoSource es una fuente vacía (pantalla oscura) para arrancar sin cámara y
+elegir un vídeo desde el menú.
 """
 
 # =============================================================================
@@ -32,6 +39,8 @@ from config import CameraConfig
 # =============================================================================
 _DEFAULT_FPS = 30.0
 _MAX_CATCH_UP_FRAMES = 120   # Máximo de frames que se saltan de golpe si el equipo va lento
+_MIN_ASPECT = 4 / 3          # Más estrecho que esto (vertical) -> se rellena a 16:9
+_PAD_COLOR = (24, 20, 18)
 
 
 # =============================================================================
@@ -42,6 +51,23 @@ def parse_source(source: int | str) -> int | str:
     if isinstance(source, str) and source.strip().isdigit():
         return int(source.strip())
     return source
+
+
+def fit_frame(frame: np.ndarray, max_height: int) -> np.ndarray:
+    """Reduce frames demasiado grandes y centra los verticales sobre un fondo 16:9."""
+    h, w = frame.shape[:2]
+    if max_height > 0 and h > max_height * 1.05:
+        scale = max_height / h
+        frame = cv2.resize(frame, (max(int(w * scale), 1), max_height), interpolation=cv2.INTER_AREA)
+        h, w = frame.shape[:2]
+    if w / h < _MIN_ASPECT:
+        new_w = int(round(h * 16 / 9))
+        canvas = np.empty((h, new_w, 3), np.uint8)
+        canvas[:] = _PAD_COLOR
+        x = (new_w - w) // 2
+        canvas[:, x:x + w] = frame
+        frame = canvas
+    return frame
 
 
 def is_video_file(source: int | str) -> bool:
@@ -94,6 +120,10 @@ class Camera:
         self._pos = -1               # Índice del frame actual
         self._frame: np.ndarray | None = None
         self._t0 = 0.0               # Instante (reloj real) que corresponde al frame 0
+        start = int(round(max(self.cfg.start_seconds, 0.0) * self.fps))
+        if start > 0 and (self.frame_count <= 0 or start < self.frame_count - 1):
+            self._cap.set(cv2.CAP_PROP_POS_FRAMES, start)
+            self._pos = start - 1
         if not self._grab_next(retrieve=True):
             raise RuntimeError(f"El vídeo '{self.source}' no tiene frames legibles.")
 
@@ -108,7 +138,7 @@ class Camera:
             return False
         self._pos += 1
         if retrieve:
-            self._frame = frame
+            self._frame = fit_frame(frame, self.cfg.height)
             self.frame_id += 1
         return True
 
@@ -167,9 +197,18 @@ class Camera:
 
     @property
     def frame_size(self) -> tuple[int, int]:
-        """(ancho, alto) del vídeo."""
+        """(ancho, alto) del vídeo, ya adaptado (ver fit_frame)."""
         h, w = self._frame.shape[:2]
         return w, h
+
+    @property
+    def label(self) -> str:
+        """Nombre de la fuente para mostrar en pantalla."""
+        if self.is_video:
+            return Path(self.source).name
+        if isinstance(self.source, int):
+            return f"Cámara {self.source}"
+        return "Cámara del móvil"
 
     @property
     def duration(self) -> float:
@@ -204,7 +243,9 @@ class Camera:
                 return None
             self._failed = 0
             self.frame_id += 1
-        return cv2.flip(frame, 1) if self.cfg.mirror else frame.copy()
+            frame = fit_frame(frame, self.cfg.height)
+        mirror = self.cfg.mirror_video if self.is_video else self.cfg.mirror
+        return cv2.flip(frame, 1) if mirror else frame.copy()
 
     # --- Cierre (también usable con "with") ----------------------------------
     def release(self) -> None:
@@ -217,3 +258,42 @@ class Camera:
 
     def __exit__(self, *exc) -> None:
         self.release()
+
+
+class NoSource:
+    """Fuente vacía: pantalla oscura, sin detección. Permite abrir el juego sin
+    cámara y elegir un vídeo desde el menú."""
+    is_video = False
+    is_null = True
+    source = None
+    label = "Sin cámara"
+    paused = ended = False
+
+    def __init__(self, width: int = 1280, height: int = 720):
+        self._frame = np.empty((height, width, 3), np.uint8)
+        self._frame[:] = _PAD_COLOR
+        self.frame_id = 0
+
+    def read(self) -> np.ndarray:
+        self.frame_id += 1
+        time.sleep(1 / 30)
+        return self._frame.copy()
+
+    def clock(self) -> float:
+        return time.monotonic()
+
+    def timestamp_ms(self) -> None:
+        return None
+
+    @property
+    def frame_size(self) -> tuple[int, int]:
+        return self._frame.shape[1], self._frame.shape[0]
+
+    def release(self) -> None:
+        pass
+
+    def __enter__(self) -> "NoSource":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        pass
