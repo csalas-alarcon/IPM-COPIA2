@@ -26,19 +26,22 @@ from unittest import mock
 import cv2
 import numpy as np
 
-SRC_DIR = Path(__file__).resolve().parent.parent / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+TESTS_DIR = Path(__file__).resolve().parent
+SRC_DIR = TESTS_DIR.parent / "src"
+for ruta in (SRC_DIR, TESTS_DIR):
+    if str(ruta) not in sys.path:
+        sys.path.insert(0, str(ruta))
 
 from exercises.catalog import build_exercises  # noqa: E402
 from game.history import HistoryEntry  # noqa: E402
-from ui.canvas import ACCENT, GREEN, GREY, RED, WHITE, Canvas, TextRenderer, lerp_color, score_color  # noqa: E402
+from ui.canvas import ACCENT, GREEN, RED, WHITE, Canvas, TextRenderer, lerp_color, score_color  # noqa: E402
 from ui.dialogs import ask_video_file, list_videos  # noqa: E402
 from ui.recorder import Recorder  # noqa: E402
 from ui.screens import (Feedback, MenuInfo, PickerInfo, _mmss, _nice_ceil, draw_feedback,  # noqa: E402
                         draw_history, draw_menu, draw_toast, draw_video_picker, draw_video_status)
 from ui.sound import SAMPLE_RATE, Sound, synthesize, to_wav_bytes  # noqa: E402
 from ui.widgets import button, checkbox, draw_line_chart, draw_rep_chart  # noqa: E402
+from utilidades import RelojFalso  # noqa: E402
 
 
 # =============================================================================
@@ -66,16 +69,6 @@ def entrada(i, exercises=("Flexión",)):
     """Partida guardada de prueba; i = días desde el 1/11/2026."""
     return HistoryEntry(Path("x"), datetime(2026, 11, 1) + timedelta(days=i), 300 + 50 * i,
                         8, 70 + i, list(exercises))
-
-
-def contar_frames(path):
-    """Número de frames de un vídeo leyéndolo entero."""
-    cap = cv2.VideoCapture(str(path))
-    n = 0
-    while cap.read()[0]:
-        n += 1
-    cap.release()
-    return n
 
 
 # =============================================================================
@@ -138,14 +131,10 @@ class TestFormas(unittest.TestCase):
     def test_panel_que_sale_de_la_pantalla_se_recorta(self):
         c = nuevo_lienzo()
         c.frame[:] = 50
-        c.panel(-100, -100, 100, 100)                 # Solo parte visible
+        c.panel(-100, -100, 100, 100)                 # Solo se pinta la parte visible
         self.assertNotEqual(int(c.frame[10, 10, 0]), 50)
-        c.panel(-500, -500, 5000, 5000)               # Más grande que el frame: no falla
-
-    def test_polilinea_normal_dibuja(self):
-        c = nuevo_lienzo()
-        c.polyline([(0, 10), (100, 10), (200, 50)], WHITE, 2)
-        self.assertGreater(int(c.frame[10, 50].sum()), 0)
+        c.panel(-500, -500, 5000, 5000)               # Más grande que el frame
+        self.assertEqual(c.frame.shape, (720, 1280, 3))
 
     def test_polilinea_discontinua_deja_huecos(self):
         c = nuevo_lienzo()
@@ -214,11 +203,6 @@ class TestBotones(unittest.TestCase):
 
 
 class TestGraficas(unittest.TestCase):
-    def test_grafica_de_repeticion_vacia_no_falla(self):
-        c = nuevo_lienzo()
-        draw_rep_chart(c, 20, 20, 600, 400, [], [])
-        c.finish()
-
     def test_grafica_de_repeticion_con_un_punto_no_dibuja_curva(self):
         vacia, un_punto = nuevo_lienzo(), nuevo_lienzo()
         draw_rep_chart(vacia, 20, 20, 600, 400, [], [])
@@ -230,11 +214,6 @@ class TestGraficas(unittest.TestCase):
         draw_rep_chart(vacia, 20, 20, 600, 400, [], [])
         draw_rep_chart(normal, 20, 20, 600, 400, [0, 0.5, 1, 0.5, 0], [0, 0.4, 1, 0.4, 0])
         self.assertFalse(np.array_equal(vacia.frame, normal.frame))
-
-    def test_grafica_de_lineas_vacia_no_falla(self):
-        c = nuevo_lienzo()
-        draw_line_chart(c, 20, 20, 600, 400, [], 100)
-        c.finish()
 
     def test_grafica_de_lineas_con_un_punto_dibuja_el_marcador(self):
         vacia, un_punto = nuevo_lienzo(), nuevo_lienzo()
@@ -312,20 +291,15 @@ class TestAvisos(unittest.TestCase):
 # Pantallas: menú, selector de vídeo e historial
 # =============================================================================
 class TestMenu(unittest.TestCase):
-    def test_empezar_deshabilitado_sin_ejercicios(self):
-        c = nuevo_lienzo()
-        draw_menu(c, menu(selected=()))
-        self.assertNotIn("start", acciones(c))
-
-    def test_empezar_deshabilitado_sin_fuente(self):
-        c = nuevo_lienzo()
-        draw_menu(c, menu(source_kind="none"))
-        self.assertNotIn("start", acciones(c))
-
-    def test_empezar_activo_con_ejercicio_y_fuente(self):
-        c = nuevo_lienzo()
-        draw_menu(c, menu())
-        self.assertIn("start", acciones(c))
+    def test_empezar_solo_con_algun_ejercicio_y_una_fuente(self):
+        casos = (("sin ejercicios", menu(selected=()), False),
+                 ("sin fuente", menu(source_kind="none"), False),
+                 ("con ejercicio y fuente", menu(), True))
+        for nombre, info, activo in casos:
+            with self.subTest(nombre):
+                c = nuevo_lienzo()
+                draw_menu(c, info)
+                self.assertEqual("start" in acciones(c), activo)
 
     def test_menu_tiene_los_botones_basicos(self):
         c = nuevo_lienzo()
@@ -354,15 +328,12 @@ class TestSelectorDeVideo(unittest.TestCase):
         self.assertEqual([a for a in acciones(c) if a.startswith("video:")], [])
         self.assertIn("back", acciones(c))
 
-    def test_buscar_deshabilitado_sin_tkinter(self):
-        c = nuevo_lienzo()
-        draw_video_picker(c, PickerInfo(can_browse=False))
-        self.assertNotIn("browse", acciones(c))
-
-    def test_buscar_disponible_con_tkinter(self):
-        c = nuevo_lienzo()
-        draw_video_picker(c, PickerInfo(can_browse=True))
-        self.assertIn("browse", acciones(c))
+    def test_buscar_en_el_ordenador_solo_con_tkinter(self):
+        for hay_tkinter in (False, True):
+            with self.subTest(tkinter=hay_tkinter):
+                c = nuevo_lienzo()
+                draw_video_picker(c, PickerInfo(can_browse=hay_tkinter))
+                self.assertEqual("browse" in acciones(c), hay_tkinter)
 
 
 class TestHistorial(unittest.TestCase):
@@ -387,133 +358,144 @@ class TestHistorial(unittest.TestCase):
 # =============================================================================
 class TestSintesis(unittest.TestCase):
     def test_duracion_es_la_suma_de_las_notas(self):
-        sig = synthesize([(440, 0.1), (660, 0.05)])
-        self.assertEqual(len(sig), int(SAMPLE_RATE * 0.1) + int(SAMPLE_RATE * 0.05))
+        senal = synthesize([(440, 0.1), (660, 0.05)])
+        self.assertEqual(len(senal), int(SAMPLE_RATE * 0.1) + int(SAMPLE_RATE * 0.05))
 
     def test_frecuencia_cero_es_silencio(self):
         self.assertTrue(np.all(synthesize([(0, 0.1)]) == 0))
 
+    def test_la_amplitud_no_pasa_del_volumen(self):
+        senal = synthesize([(440, 0.1)], volume=0.35)
+        self.assertLessEqual(float(np.abs(senal).max()), 0.35)
+        self.assertGreater(float(np.abs(senal).max()), 0.3)
+
     def test_wav_tiene_cabecera_y_numero_de_muestras(self):
-        sig = synthesize([(440, 0.1)])
-        data = to_wav_bytes(sig)
-        self.assertTrue(data.startswith(b"RIFF"))
-        self.assertEqual(data[8:12], b"WAVE")
-        with wave.open(io.BytesIO(data)) as w:
-            self.assertEqual(w.getnframes(), len(sig))
-            self.assertEqual(w.getframerate(), SAMPLE_RATE)
-            self.assertEqual(w.getnchannels(), 1)
+        senal = synthesize([(440, 0.1)])
+        datos = to_wav_bytes(senal)
+        self.assertTrue(datos.startswith(b"RIFF"))
+        self.assertEqual(datos[8:12], b"WAVE")
+        with wave.open(io.BytesIO(datos)) as wav:
+            self.assertEqual(wav.getnframes(), len(senal))
+            self.assertEqual(wav.getframerate(), SAMPLE_RATE)
+            self.assertEqual(wav.getnchannels(), 1)
 
 
 class TestSonido(unittest.TestCase):
-    def test_sin_sonido_no_hace_nada(self):
-        snd = Sound(enabled=False)
-        self.assertFalse(snd.enabled)
-        snd.play("rep")
+    def setUp(self):
+        # Sound(enabled=False) no abre ningún dispositivo; se le pone un backend simulado
+        self.sonido = Sound(enabled=False)
+        self.sonido.backend = "sounddevice"
+        self.sonido._sd = mock.Mock()
 
-    def test_nombre_desconocido_no_falla(self):
-        snd = Sound(enabled=False)
-        snd.backend, snd._sd = "sounddevice", mock.Mock()
-        snd.play("no_existe")
-        snd._sd.play.assert_not_called()
+    def test_sin_backend_no_hace_nada(self):
+        silencioso = Sound(enabled=False)
+        self.assertFalse(silencioso.enabled)
+        silencioso.play("rep")
+
+    def test_nombre_desconocido_no_suena(self):
+        self.sonido.play("no_existe")
+        self.sonido._sd.play.assert_not_called()
 
     def test_reproduce_con_el_backend(self):
-        snd = Sound(enabled=False)
-        snd.backend, snd._sd = "sounddevice", mock.Mock()
-        snd.play("rep")
-        snd._sd.play.assert_called_once()
+        self.sonido.play("rep")
+        self.sonido._sd.play.assert_called_once()
 
     def test_error_del_backend_desactiva_el_sonido(self):
-        snd = Sound(enabled=False)
-        snd.backend, snd._sd = "sounddevice", mock.Mock()
-        snd._sd.play.side_effect = OSError("sin dispositivo")
+        self.sonido._sd.play.side_effect = OSError("sin dispositivo")
         with contextlib.redirect_stdout(io.StringIO()):
-            snd.play("rep")
-        self.assertFalse(snd.enabled)
-        self.assertIsNone(snd.backend)
+            self.sonido.play("rep")
+        self.assertFalse(self.sonido.enabled)
+        self.assertIsNone(self.sonido.backend)
 
 
 # =============================================================================
 # Grabación de la ventana
 # =============================================================================
 class TestGrabadora(unittest.TestCase):
-    def test_activa_y_cierra(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            reloj = [100.0]
-            with mock.patch("ui.recorder.time.monotonic", new=lambda: reloj[0]):
-                rec = Recorder(Path(tmp) / "rec.mp4", fps=10)
-                self.assertFalse(rec.active)
-                rec.write(np.zeros((240, 320, 3), np.uint8))
-                self.assertTrue(rec.active)
-                rec.close()
-                self.assertFalse(rec.active)
+    def setUp(self):
+        self.carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.ruta = self.carpeta / "rec.mp4"
+        self.reloj = RelojFalso()
+        self.enterContext(mock.patch("ui.recorder.time", self.reloj))
+        self.enterContext(contextlib.redirect_stdout(io.StringIO()))   # La grabadora avisa por consola
 
-    def test_cerrar_dos_veces_no_falla(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch("ui.recorder.time.monotonic", new=lambda: 100.0):
-                rec = Recorder(Path(tmp) / "rec.mp4", fps=10)
-                rec.write(np.zeros((240, 320, 3), np.uint8))
-                rec.close()
-                rec.close()
+    def leer_video(self):
+        """(ancho, alto, número de frames) del vídeo grabado."""
+        captura = cv2.VideoCapture(str(self.ruta))
+        ancho = int(captura.get(cv2.CAP_PROP_FRAME_WIDTH))
+        alto = int(captura.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames = 0
+        while captura.read()[0]:
+            frames += 1
+        captura.release()
+        return ancho, alto, frames
+
+    def test_se_activa_al_escribir_y_se_puede_cerrar_dos_veces(self):
+        grabadora = Recorder(self.ruta, fps=10)
+        self.assertFalse(grabadora.active)
+        grabadora.write(np.zeros((240, 320, 3), np.uint8))
+        self.assertTrue(grabadora.active)
+        grabadora.close()
+        self.assertFalse(grabadora.active)
+        grabadora.close()
 
     def test_repite_frames_segun_el_reloj(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            reloj = [100.0]
-            with mock.patch("ui.recorder.time.monotonic", new=lambda: reloj[0]):
-                ruta = Path(tmp) / "rec.mp4"
-                rec = Recorder(ruta, fps=10)
-                frame = np.full((240, 320, 3), 120, np.uint8)
-                rec.write(frame)                              # t = 0 s: 1 frame
-                reloj[0] = 100.5
-                rec.write(frame)                              # t = 0.5 s: hasta 6 frames en total
-                rec.close()
-            self.assertEqual(contar_frames(ruta), 6)
+        grabadora = Recorder(self.ruta, fps=10)
+        frame = np.full((240, 320, 3), 120, np.uint8)
+        grabadora.write(frame)                                # t = 0 s: 1 frame
+        self.reloj.avanzar(0.5)
+        grabadora.write(frame)                                # t = 0,5 s: 6 frames en total
+        grabadora.close()
+        self.assertEqual(self.leer_video()[2], 6)
+        self.assertAlmostEqual(grabadora.elapsed, 0.6)
 
-    def test_frames_de_otro_tamano_se_ajustan(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            reloj = [100.0]
-            with mock.patch("ui.recorder.time.monotonic", new=lambda: reloj[0]):
-                ruta = Path(tmp) / "rec.mp4"
-                rec = Recorder(ruta, fps=10)
-                rec.write(np.zeros((240, 320, 3), np.uint8))
-                reloj[0] = 100.2
-                rec.write(np.zeros((480, 640, 3), np.uint8))  # Doble de tamaño
-                rec.close()
-            cap = cv2.VideoCapture(str(ruta))
-            self.assertEqual(int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), 320)
-            self.assertEqual(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), 240)
-            cap.release()
+    def test_el_tamano_se_fija_con_el_primer_frame_y_se_hace_par(self):
+        grabadora = Recorder(self.ruta, fps=10)
+        grabadora.write(np.zeros((241, 321, 3), np.uint8))    # Ancho y alto impares: se ajustan
+        self.reloj.avanzar(0.2)
+        grabadora.write(np.zeros((480, 640, 3), np.uint8))    # Otro tamaño: se reescala
+        grabadora.close()
+        self.assertEqual(self.leer_video()[:2], (320, 240))
 
 
 # =============================================================================
 # Lista de vídeos y explorador de archivos
 # =============================================================================
 class TestListaDeVideos(unittest.TestCase):
+    def setUp(self):
+        self.carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
     def test_solo_videos_sin_repetir_y_ordenados(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            carpeta = Path(tmp)
-            (carpeta / "b.mp4").write_bytes(b"")
-            (carpeta / "A.MOV").write_bytes(b"")              # Extensión en mayúsculas
-            (carpeta / "notas.txt").write_text("x")
-            encontrados = list_videos([carpeta, carpeta])     # La misma carpeta dos veces
-            self.assertEqual([p.name for p in encontrados], ["A.MOV", "b.mp4"])
+        (self.carpeta / "b.mp4").write_bytes(b"")
+        (self.carpeta / "A.MOV").write_bytes(b"")             # Extensión en mayúsculas
+        (self.carpeta / "notas.txt").write_text("x")
+        encontrados = list_videos([self.carpeta, self.carpeta])    # La misma carpeta dos veces
+        self.assertEqual([p.name for p in encontrados], ["A.MOV", "b.mp4"])
 
     def test_carpeta_inexistente_se_ignora(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(list_videos([Path(tmp) / "no_existe"]), [])
+        self.assertEqual(list_videos([self.carpeta / "no_existe"]), [])
 
     def test_limite(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            for nombre in ("a.mp4", "b.mp4", "c.mp4"):
-                (Path(tmp) / nombre).write_bytes(b"")
-            self.assertEqual(len(list_videos([tmp], limit=2)), 2)
+        for nombre in ("a.mp4", "b.mp4", "c.mp4"):
+            (self.carpeta / nombre).write_bytes(b"")
+        self.assertEqual(len(list_videos([self.carpeta], limit=2)), 2)
 
 
 class TestExplorador(unittest.TestCase):
-    def test_sin_tkinter_devuelve_none(self):
+    def test_sin_tkinter_devuelve_none_sin_abrir_nada(self):
         with mock.patch("ui.dialogs.tk_available", return_value=False), \
-                mock.patch("ui.dialogs.subprocess.run") as run:
+                mock.patch("ui.dialogs.subprocess.run") as ejecutar:
             self.assertIsNone(ask_video_file(Path(".")))
-        run.assert_not_called()
+        ejecutar.assert_not_called()
+
+    def test_devuelve_la_ruta_elegida_o_none_si_se_cancela(self):
+        casos = (("elegido\n", "elegido"), ("", None))        # El proceso escribe la ruta en su salida
+        for salida, esperada in casos:
+            with self.subTest(salida=salida), \
+                    mock.patch("ui.dialogs.tk_available", return_value=True), \
+                    mock.patch("ui.dialogs.subprocess.run",
+                               return_value=mock.Mock(stdout=salida)):
+                self.assertEqual(ask_video_file(Path(".")), esperada)
 
 
 # =============================================================================

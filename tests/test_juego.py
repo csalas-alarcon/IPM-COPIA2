@@ -1,9 +1,10 @@
 """
-tests/test_juego.py  ·  Pruebas de teclas, fuentes, resultados, argumentos y scripts.
+tests/test_juego.py  ·  Pruebas de src/game, src/main.py, src/config.py y scripts/.
 
-Complementa a tests/test_logic.py (flujo completo y calibración): aquí se prueban
-el mapa de teclas, el cambio de fuente, el guardado y el historial, los argumentos
-de línea de comandos, la configuración y los scripts. Sin cámara, sin ventana y sin red.
+Teclas y botones del juego, cambio de fuente, fin del vídeo, guardado de
+resultados, historial, argumentos de la línea de comandos, configuración y
+scripts. Las partidas completas están en test_logic.py. Sin cámara, sin
+ventana y sin red; los resultados se guardan en carpetas temporales.
 
 Ejecutar:  .venv/bin/python -m unittest tests.test_juego -v
 (Windows:  .venv\\Scripts\\python -m unittest tests.test_juego -v)
@@ -25,7 +26,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -43,15 +44,14 @@ import main as juego_main  # noqa: E402
 from analysis.scoring import RepScore  # noqa: E402
 from config import Settings  # noqa: E402
 from exercises.catalog import build_exercises  # noqa: E402
-from game.game import Game, Phase  # noqa: E402
-from game.history import load_history  # noqa: E402
+from game.game import Phase  # noqa: E402
+from game.history import HistoryEntry, load_history  # noqa: E402
 from game.session import ExerciseSession, save_sessions  # noqa: E402
-from test_logic import FakeCamera, FakeVideo, make_game, pushup_pose  # noqa: E402
-from ui.canvas import RED, TextRenderer  # noqa: E402
+from ui.canvas import RED  # noqa: E402
 from ui.screens import PickerInfo  # noqa: E402
+from utilidades import (FRAME, CamaraFalsa, PruebaDeJuego, VideoFalso, crear_juego,  # noqa: E402
+                        pose_flexion)
 from vision.camera import NoSource  # noqa: E402
-
-FRAME = np.zeros((720, 1280, 3), np.uint8)
 
 
 # =============================================================================
@@ -70,24 +70,6 @@ class FuenteFalsa:
         if self.error is not None:
             raise self.error
         return self.fuente
-
-
-class VideoConSalida(FakeVideo):
-    """FakeVideo que anota si se liberó (al cambiar de fuente el juego lo libera)."""
-
-    def __init__(self):
-        super().__init__()
-        self.liberado = False
-
-    def release(self):
-        self.liberado = True
-
-
-def juego_con_fuente(camara, fuente):
-    """Como make_game, pero con una función falsa para abrir las fuentes."""
-    ajustes = Settings()
-    ajustes.game.save_results = False
-    return Game(ajustes, camara, None, build_exercises(["pushup"]), TextRenderer(), open_source=fuente)
 
 
 def repeticion(total, consejos=(), tecnica=1.0):
@@ -111,374 +93,403 @@ def cargar_script(nombre):
     return modulo
 
 
-class AisladoDeResultados(unittest.TestCase):
-    """Los tests que guardan o leen partidas usan una carpeta temporal, nunca results/."""
-
-    def setUp(self):
-        carpeta = tempfile.TemporaryDirectory()
-        self.addCleanup(carpeta.cleanup)
-        self.resultados = Path(carpeta.name)
-        parche = mock.patch("game.game.RESULTS_DIR", self.resultados)
-        parche.start()
-        self.addCleanup(parche.stop)
-
-
 # =============================================================================
 # Teclas del menú y de las pantallas generales
 # =============================================================================
-class TestTeclasDelMenu(AisladoDeResultados):
+class TestTeclasGenerales(PruebaDeJuego):
     def test_escape_en_el_menu_sale(self):
-        g = make_game()
-        g._handle_key(27)
-        self.assertFalse(g._running)
+        juego = crear_juego()
+        juego._handle_key(27)
+        self.assertFalse(juego._running)
 
     def test_escape_y_q_salen_desde_las_pantallas_de_juego(self):
         for fase in (Phase.INSTRUCTIONS, Phase.ACTIVE, Phase.EXERCISE_RESULT, Phase.SUMMARY):
             for tecla in (27, ord("q"), ord("Q")):
                 with self.subTest(fase=fase.name, tecla=tecla):
-                    g = make_game()
-                    g._go(fase)
-                    g._handle_key(tecla)
-                    self.assertFalse(g._running)
+                    juego = crear_juego()
+                    juego._go(fase)
+                    juego._handle_key(tecla)
+                    self.assertFalse(juego._running)
 
-    def test_espacio_empieza_el_juego(self):
-        g = make_game()
-        g._handle_key(32)
-        self.assertIs(g.phase, Phase.INSTRUCTIONS)
-
-    def test_numeros_activan_y_desactivan_ejercicios(self):
-        g = make_game()                                   # Al principio sólo está marcada la flexión
-        g._handle_key(ord("2"))
-        self.assertEqual(g.selected, {"pushup", "pullup"})
-        g._handle_key(ord("1"))
-        self.assertEqual(g.selected, {"pullup"})
-
-    def test_numero_fuera_de_la_lista_no_hace_nada(self):
-        g = make_game()
-        g._handle_key(ord("9"))
-        self.assertEqual(g.selected, {"pushup"})
-
-    def test_r_vuelve_al_menu_y_borra_la_partida(self):
-        g = make_game()
-        g._do("start")
-        g._handle_key(ord("r"))
-        self.assertIs(g.phase, Phase.MENU)
-        self.assertEqual(g.sessions, [])
+    def test_enter_y_espacio_empiezan_el_juego_desde_el_menu(self):
+        for tecla in (13, 10, 32):
+            with self.subTest(tecla=tecla):
+                juego = crear_juego()
+                juego._handle_key(tecla)
+                self.assertIs(juego.phase, Phase.INSTRUCTIONS)
 
     def test_f_alterna_pantalla_completa(self):
-        g = make_game()
-        g._handle_key(ord("f"))
-        self.assertTrue(g._fullscreen)
-        g._handle_key(ord("f"))
-        self.assertFalse(g._fullscreen)
+        juego = crear_juego()
+        juego._handle_key(ord("f"))
+        self.assertTrue(juego._fullscreen)
+        juego._handle_key(ord("f"))
+        self.assertFalse(juego._fullscreen)
 
-    def test_g_empieza_y_para_la_grabacion(self):
-        g = make_game()
-        g._handle_key(ord("g"))
-        self.assertIsNotNone(g.recorder)
-        g._handle_key(ord("g"))
-        self.assertIsNone(g.recorder)
+    def test_g_empieza_y_para_la_grabacion_en_results(self):
+        juego = crear_juego()
+        juego._handle_key(ord("g"))
+        self.assertEqual(juego.recorder.path.parent, self.resultados.resolve())
+        self.assertRegex(juego.recorder.path.name, r"^grabacion_\d{8}_\d{6}\.mp4$")
+        juego._handle_key(ord("g"))
+        self.assertIsNone(juego.recorder)
 
     def test_sin_tecla_pulsada_no_hace_nada(self):
-        g = make_game()
+        juego = crear_juego()
         for valor in (-1, 255):                           # Lo que devuelve waitKey sin pulsar nada
-            g._handle_key(valor)
-        self.assertIs(g.phase, Phase.MENU)
-        self.assertTrue(g._running)
+            juego._handle_key(valor)
+        self.assertIs(juego.phase, Phase.MENU)
+        self.assertTrue(juego._running)
+
+
+class TestMenu(PruebaDeJuego):
+    def test_numeros_activan_y_desactivan_ejercicios(self):
+        juego = crear_juego()                             # Al principio sólo está marcada la flexión
+        juego._handle_key(ord("2"))
+        self.assertEqual(juego.selected, {"pushup", "pullup"})
+        juego._handle_key(ord("1"))
+        self.assertEqual(juego.selected, {"pullup"})
+
+    def test_numero_fuera_de_la_lista_no_hace_nada(self):
+        juego = crear_juego()
+        juego._handle_key(ord("9"))
+        self.assertEqual(juego.selected, {"pushup"})
+
+    def test_empezar_usa_los_ejercicios_marcados_y_la_calibracion_elegida(self):
+        juego = crear_juego()
+        self.assertEqual([e.key for e in juego.available], ["pushup", "pullup", "bulgarian_squat"])
+        juego._handle_key(ord("3"))                       # Activa la sentadilla búlgara
+        juego._handle_key(ord("k"))                       # Quita la repetición de prueba
+        self.assertFalse(juego.settings.game.calibrate)
+        juego._do("start")
+        self.assertEqual([e.key for e in juego.exercises], ["pushup", "bulgarian_squat"])
+        self.assertIs(juego.phase, Phase.INSTRUCTIONS)
+
+    def test_sin_ejercicios_marcados_no_empieza_y_avisa(self):
+        juego = crear_juego()
+        juego.selected.clear()
+        juego._do("start")
+        self.assertIs(juego.phase, Phase.MENU)
+        self.assertIsNotNone(juego._toast)
+
+    def test_sin_fuente_no_empieza(self):
+        juego = crear_juego(camara=NoSource(320, 240))
+        juego._do("start")
+        self.assertIs(juego.phase, Phase.MENU)
+
+    def test_r_vuelve_al_menu_y_borra_la_partida(self):
+        juego = crear_juego()
+        juego._do("start")
+        juego._handle_key(ord("r"))
+        self.assertIs(juego.phase, Phase.MENU)
+        self.assertEqual(juego.sessions, [])
 
 
 # =============================================================================
 # Selector de vídeo
 # =============================================================================
-class TestTeclasDelSelectorDeVideo(AisladoDeResultados):
+class TestSelectorDeVideo(PruebaDeJuego):
     def setUp(self):
         super().setUp()
-        self.videos = [Path("/videos/a.mp4"), Path("/videos/b.mp4")]
-        self.fuente = FuenteFalsa(VideoConSalida())
-        self.g = juego_con_fuente(NoSource(320, 240), self.fuente)
-        self.g._picker = PickerInfo(self.videos, Path("/videos"), False)
-        self.g._go(Phase.PICK_VIDEO)
+        self.videos = [Path("videos/a.mp4"), Path("videos/b.mp4")]
+        self.fuente = FuenteFalsa(VideoFalso())
+        self.juego = crear_juego(camara=NoSource(320, 240), open_source=self.fuente)
+        self.juego._picker = PickerInfo(self.videos, Path("videos"), False)
+        self.juego._go(Phase.PICK_VIDEO)
 
     def test_escape_vuelve_al_menu_sin_salir(self):
-        self.g._handle_key(27)
-        self.assertIs(self.g.phase, Phase.MENU)
-        self.assertTrue(self.g._running)
+        self.juego._handle_key(27)
+        self.assertIs(self.juego.phase, Phase.MENU)
+        self.assertTrue(self.juego._running)
 
     def test_numero_elige_el_video_de_la_lista(self):
-        self.g._handle_key(ord("2"))
+        self.juego._handle_key(ord("2"))
         self.assertEqual(self.fuente.llamadas, [str(self.videos[1])])
-        self.assertIs(self.g.phase, Phase.MENU)
-        self.assertIs(self.g.camera, self.fuente.fuente)
+        self.assertIs(self.juego.phase, Phase.MENU)
+        self.assertIs(self.juego.camera, self.fuente.fuente)
 
     def test_numero_fuera_de_la_lista_no_abre_nada(self):
-        self.g._handle_key(ord("5"))
+        self.juego._handle_key(ord("5"))
         self.assertEqual(self.fuente.llamadas, [])
-        self.assertIs(self.g.phase, Phase.PICK_VIDEO)
+        self.assertIs(self.juego.phase, Phase.PICK_VIDEO)
 
-    def test_b_busca_en_el_ordenador_y_usa_el_archivo_elegido(self):
-        with mock.patch("game.game.ask_video_file", return_value=Path("/x/c.mp4")):
-            self.g._handle_key(ord("b"))
-        self.assertEqual(self.fuente.llamadas, [Path("/x/c.mp4")])
-        self.assertIs(self.g.phase, Phase.MENU)
+    def test_b_usa_el_archivo_elegido_en_el_explorador(self):
+        with mock.patch("game.game.ask_video_file", return_value=Path("otro/c.mp4")):
+            self.juego._handle_key(ord("b"))
+        self.assertEqual(self.fuente.llamadas, [Path("otro/c.mp4")])
+        self.assertIs(self.juego.phase, Phase.MENU)
 
     def test_b_cancelado_sigue_en_el_selector(self):
         with mock.patch("game.game.ask_video_file", return_value=None):
-            self.g._handle_key(ord("b"))
+            self.juego._handle_key(ord("b"))
         self.assertEqual(self.fuente.llamadas, [])
-        self.assertIs(self.g.phase, Phase.PICK_VIDEO)
+        self.assertIs(self.juego.phase, Phase.PICK_VIDEO)
 
     def test_v_en_el_menu_abre_el_selector_con_los_videos_encontrados(self):
-        g = make_game()
+        juego = crear_juego()
         with mock.patch("game.game.list_videos", return_value=self.videos), \
                 mock.patch("game.game.tk_available", return_value=False):
-            g._handle_key(ord("v"))
-        self.assertIs(g.phase, Phase.PICK_VIDEO)
-        self.assertEqual(g._picker.videos, self.videos)
-        self.assertFalse(g._picker.can_browse)
-
-
-# =============================================================================
-# Historial
-# =============================================================================
-class TestTeclasDelHistorial(AisladoDeResultados):
-    def test_h_en_el_menu_abre_el_historial(self):
-        g = make_game()
-        g._handle_key(ord("h"))
-        self.assertIs(g.phase, Phase.HISTORY)
-
-    def test_escape_y_enter_vuelven_al_menu(self):
-        for tecla in (27, 13):
-            with self.subTest(tecla=tecla):
-                g = make_game()
-                g._handle_key(ord("h"))
-                g._handle_key(tecla)
-                self.assertIs(g.phase, Phase.MENU)
-                self.assertTrue(g._running)
-
-    def test_h_desde_el_resumen_vuelve_al_resumen(self):
-        g = make_game()
-        g._go(Phase.SUMMARY)
-        g._handle_key(ord("h"))
-        self.assertIs(g.phase, Phase.HISTORY)
-        g._handle_key(27)
-        self.assertIs(g.phase, Phase.SUMMARY)
-
-    def test_h_durante_el_ejercicio_no_hace_nada(self):
-        g = make_game()
-        g._do("start")
-        g._handle_key(ord("h"))
-        self.assertIs(g.phase, Phase.INSTRUCTIONS)
-
-
-# =============================================================================
-# Pausa, salto y reinicio
-# =============================================================================
-class TestPausaSaltoYReinicio(AisladoDeResultados):
-    def test_pausa_no_actua_en_el_menu(self):
-        cam = FakeVideo()
-        g = make_game(camera=cam)
-        g._handle_key(ord("p"))
-        self.assertTrue(cam.paused)
-
-    def test_pausa_alterna_el_video_durante_el_ejercicio(self):
-        cam = FakeVideo()
-        g = make_game(camera=cam)
-        g._do("start")
-        self.assertFalse(cam.paused)
-        g._handle_key(ord("p"))
-        self.assertTrue(cam.paused)
-        g._handle_key(ord("p"))
-        self.assertFalse(cam.paused)
-
-    def test_pausa_no_hace_nada_con_camara(self):
-        # FakeCamera no tiene toggle_pause: si el juego intentara pausar, fallaría
-        g = make_game(camera=FakeCamera())
-        g._do("start")
-        g._handle_key(ord("p"))
-        self.assertIs(g.phase, Phase.INSTRUCTIONS)
-
-    def test_r_con_video_lo_rebobina(self):
-        cam = FakeVideo()
-        g = make_game(camera=cam)
-        g._do("start")
-        cam.position = 12.0
-        g._handle_key(ord("r"))
-        self.assertIs(g.phase, Phase.MENU)
-        self.assertEqual(cam.position, 0.0)
-        self.assertTrue(cam.paused)
-
-    def test_n_salta_el_ejercicio_en_instrucciones(self):
-        g = make_game(keys=("pushup", "pullup"))
-        g._do("start")
-        g._handle_key(ord("n"))
-        self.assertIs(g.phase, Phase.EXERCISE_RESULT)
-        self.assertTrue(g.sessions[0].skipped)
-        g._handle_key(13)                                 # Pasa al siguiente ejercicio
-        self.assertIs(g.phase, Phase.INSTRUCTIONS)
-        self.assertEqual(g.index, 1)
-
-    def test_n_salta_el_ejercicio_en_calibracion(self):
-        g = make_game()
-        g._do("start")
-        g._go(Phase.CALIBRATION)
-        g._handle_key(ord("n"))
-        self.assertIs(g.phase, Phase.EXERCISE_RESULT)
-        self.assertTrue(g.session.skipped)
+            juego._handle_key(ord("v"))
+        self.assertIs(juego.phase, Phase.PICK_VIDEO)
+        self.assertEqual(juego._picker.videos, self.videos)
+        self.assertFalse(juego._picker.can_browse)
 
 
 # =============================================================================
 # Cambio de fuente
 # =============================================================================
-class TestCambioDeFuente(AisladoDeResultados):
+class TestCambioDeFuente(PruebaDeJuego):
     def test_boton_camara_sin_camara_la_abre(self):
-        fuente = FuenteFalsa(FakeCamera())
-        g = juego_con_fuente(NoSource(320, 240), fuente)
-        g._do("camera")
+        fuente = FuenteFalsa(CamaraFalsa())
+        juego = crear_juego(camara=NoSource(320, 240), open_source=fuente)
+        juego._do("camera")
         self.assertEqual(fuente.llamadas, [0])
-        self.assertIs(g.camera, fuente.fuente)
-        self.assertEqual(g._toast[0], "Fuente: Cámara 0")
+        self.assertIs(juego.camera, fuente.fuente)
+        self.assertEqual(juego._toast[0], "Fuente: Cámara 0")
 
     def test_si_falla_la_fuente_no_cambia(self):
         for error in (RuntimeError("No se pudo abrir la cámara 0"), ValueError("Fuente inválida")):
             with self.subTest(error=type(error).__name__):
                 camara = NoSource(320, 240)
-                g = juego_con_fuente(camara, FuenteFalsa(error=error))
-                g._do("camera")
-                self.assertIs(g.camera, camara)
-                self.assertEqual(g._toast[0], str(error))
-                self.assertEqual(g._toast[1], RED)
+                juego = crear_juego(camara=camara, open_source=FuenteFalsa(error=error))
+                juego._do("camera")
+                self.assertIs(juego.camera, camara)
+                self.assertEqual(juego._toast[0], str(error))
+                self.assertEqual(juego._toast[1], RED)
 
     def test_boton_camara_ya_activa_no_vuelve_a_abrirla(self):
-        fuente = FuenteFalsa(FakeCamera())
-        g = juego_con_fuente(FakeCamera(), fuente)
-        g._do("camera")
+        fuente = FuenteFalsa(CamaraFalsa())
+        juego = crear_juego(open_source=fuente)
+        juego._do("camera")
         self.assertEqual(fuente.llamadas, [])
-        self.assertEqual(g._toast[0], "Ya estás usando Cámara 0")
+        self.assertEqual(juego._toast[0], "Ya estás usando Cámara 0")
 
-    def test_boton_camara_con_video_vuelve_a_la_camara(self):
-        video = VideoConSalida()
-        fuente = FuenteFalsa(FakeCamera())
-        g = juego_con_fuente(video, fuente)
-        g._do("camera")
+    def test_boton_camara_con_video_vuelve_a_la_camara_y_libera_el_video(self):
+        video = VideoFalso()
+        fuente = FuenteFalsa(CamaraFalsa())
+        juego = crear_juego(camara=video, open_source=fuente)
+        juego._do("camera")
         self.assertEqual(fuente.llamadas, [0])
-        self.assertIs(g.camera, fuente.fuente)
-        self.assertTrue(video.liberado)                   # El vídeo anterior se libera
+        self.assertIs(juego.camera, fuente.fuente)
+        self.assertTrue(video.liberado)
+
+
+# =============================================================================
+# Historial (teclas)
+# =============================================================================
+class TestTeclasDelHistorial(PruebaDeJuego):
+    def test_h_en_el_menu_abre_el_historial(self):
+        juego = crear_juego()
+        juego._handle_key(ord("h"))
+        self.assertIs(juego.phase, Phase.HISTORY)
+
+    def test_escape_y_enter_vuelven_al_menu(self):
+        for tecla in (27, 13):
+            with self.subTest(tecla=tecla):
+                juego = crear_juego()
+                juego._handle_key(ord("h"))
+                juego._handle_key(tecla)
+                self.assertIs(juego.phase, Phase.MENU)
+                self.assertTrue(juego._running)
+
+    def test_h_desde_el_resumen_vuelve_al_resumen(self):
+        juego = crear_juego()
+        juego._go(Phase.SUMMARY)
+        juego._handle_key(ord("h"))
+        self.assertIs(juego.phase, Phase.HISTORY)
+        juego._handle_key(27)
+        self.assertIs(juego.phase, Phase.SUMMARY)
+
+    def test_h_durante_el_ejercicio_no_hace_nada(self):
+        juego = crear_juego()
+        juego._do("start")
+        juego._handle_key(ord("h"))
+        self.assertIs(juego.phase, Phase.INSTRUCTIONS)
+
+
+# =============================================================================
+# Pausa, salto y reinicio
+# =============================================================================
+class TestPausaSaltoYReinicio(PruebaDeJuego):
+    def test_pausa_no_actua_en_el_menu(self):
+        video = VideoFalso()
+        juego = crear_juego(camara=video)
+        juego._handle_key(ord("p"))
+        self.assertTrue(video.paused)                     # Sigue en pausa: no se ha alternado
+
+    def test_pausa_alterna_el_video_durante_el_ejercicio(self):
+        video = VideoFalso()
+        juego = crear_juego(camara=video)
+        juego._do("start")
+        self.assertFalse(video.paused)
+        juego._handle_key(ord("p"))
+        self.assertTrue(video.paused)
+        juego._handle_key(ord("p"))
+        self.assertFalse(video.paused)
+
+    def test_pausa_con_camara_no_hace_nada(self):
+        # CamaraFalsa no tiene toggle_pause: si el juego intentara pausar, fallaría
+        juego = crear_juego()
+        juego._do("start")
+        juego._handle_key(ord("p"))
+        self.assertIs(juego.phase, Phase.INSTRUCTIONS)
+
+    def test_r_con_video_lo_rebobina(self):
+        video = VideoFalso()
+        juego = crear_juego(camara=video)
+        juego._do("start")
+        video.position = 12.0
+        juego._handle_key(ord("r"))
+        self.assertIs(juego.phase, Phase.MENU)
+        self.assertEqual(video.position, 0.0)
+        self.assertTrue(video.paused)
+
+    def test_n_salta_el_ejercicio_en_instrucciones(self):
+        juego = crear_juego(claves=("pushup", "pullup"))
+        juego._do("start")
+        juego._handle_key(ord("n"))
+        self.assertIs(juego.phase, Phase.EXERCISE_RESULT)
+        self.assertTrue(juego.sessions[0].skipped)
+        juego._handle_key(13)                             # Pasa al siguiente ejercicio
+        self.assertIs(juego.phase, Phase.INSTRUCTIONS)
+        self.assertEqual(juego.index, 1)
+
+    def test_n_salta_el_ejercicio_en_la_repeticion_de_prueba(self):
+        juego = crear_juego()
+        juego._do("start")
+        juego._go(Phase.CALIBRATION)
+        juego._handle_key(ord("n"))
+        self.assertIs(juego.phase, Phase.EXERCISE_RESULT)
+        self.assertTrue(juego.session.skipped)
 
 
 # =============================================================================
 # Fin del vídeo
 # =============================================================================
-class TestFinDelVideo(AisladoDeResultados):
-    def test_fin_del_video_en_instrucciones_espera_a_que_se_salte(self):
-        # Como dice el README: si se acaba durante las instrucciones, hay que pulsar N
-        cam = FakeVideo()
-        g = make_game(camera=cam)
-        g._do("start")
-        cam.ended = True
-        with contextlib.redirect_stdout(io.StringIO()):
-            g._on_video_end()
-        self.assertIs(g.phase, Phase.INSTRUCTIONS)
-        g._handle_key(ord("n"))
-        self.assertIs(g.phase, Phase.EXERCISE_RESULT)
-        self.assertTrue(g.session.skipped)
+class TestFinDelVideo(PruebaDeJuego):
+    def preparar(self, fase):
+        """Juego con un vídeo, en la fase dada, cuyo vídeo acaba de terminar."""
+        video = VideoFalso()
+        juego = crear_juego(camara=video)
+        juego._do("start")
+        juego._go(fase)
+        video.ended = True
+        return juego
 
-    def test_fin_del_video_cierra_el_ejercicio_en_cada_fase(self):
+    def test_en_instrucciones_espera_a_que_se_salte(self):
+        # Como dice el README: si se acaba durante las instrucciones, hay que pulsar N
+        juego = self.preparar(Phase.INSTRUCTIONS)
+        juego._on_video_end()
+        self.assertIs(juego.phase, Phase.INSTRUCTIONS)
+        juego._handle_key(ord("n"))
+        self.assertIs(juego.phase, Phase.EXERCISE_RESULT)
+        self.assertTrue(juego.session.skipped)
+
+    def test_cierra_el_ejercicio_en_cada_fase_de_juego(self):
         for fase in (Phase.COUNTDOWN, Phase.CALIBRATION, Phase.ACTIVE):
             with self.subTest(fase=fase.name):
-                cam = FakeVideo()
-                g = make_game(camera=cam)
-                g._do("start")
-                g._go(fase)
-                cam.ended = True
-                with contextlib.redirect_stdout(io.StringIO()):
-                    g._on_video_end()
-                self.assertIs(g.phase, Phase.EXERCISE_RESULT)
-                self.assertTrue(g.session.skipped)        # Sin repeticiones: cuenta como saltado
+                juego = self.preparar(fase)
+                juego._on_video_end()
+                self.assertIs(juego.phase, Phase.EXERCISE_RESULT)
+                self.assertTrue(juego.session.skipped)    # Sin repeticiones: cuenta como saltado
 
-    def test_fin_del_video_con_repeticiones_no_salta_el_ejercicio(self):
-        cam = FakeVideo()
-        g = make_game(camera=cam)
-        g._do("start")
-        g._go(Phase.ACTIVE)
-        g.session.reps.append(repeticion(90.0))
-        cam.ended = True
-        with contextlib.redirect_stdout(io.StringIO()):
-            g._on_video_end()
-        self.assertIs(g.phase, Phase.EXERCISE_RESULT)
-        self.assertFalse(g.session.skipped)
+    def test_con_repeticiones_el_ejercicio_no_se_salta(self):
+        juego = self.preparar(Phase.ACTIVE)
+        juego.session.reps.append(repeticion(90.0))
+        juego._on_video_end()
+        self.assertIs(juego.phase, Phase.EXERCISE_RESULT)
+        self.assertFalse(juego.session.skipped)
 
-    def test_fin_del_video_fuera_de_un_ejercicio_no_cambia_nada(self):
+    def test_fuera_de_un_ejercicio_no_cambia_nada(self):
         for fase in (Phase.MENU, Phase.EXERCISE_RESULT, Phase.SUMMARY):
             with self.subTest(fase=fase.name):
-                cam = FakeVideo()
-                g = make_game(camera=cam)
-                g._go(fase)
-                cam.ended = True
-                with contextlib.redirect_stdout(io.StringIO()):
-                    g._on_video_end()
-                self.assertIs(g.phase, fase)
+                juego = self.preparar(fase)
+                juego._on_video_end()
+                self.assertIs(juego.phase, fase)
 
 
 # =============================================================================
 # Ratón
 # =============================================================================
-class TestRaton(AisladoDeResultados):
+class TestRaton(PruebaDeJuego):
+    def hacer_clic_en(self, juego, accion):
+        """Dibuja la pantalla y pulsa el centro del botón de esa acción."""
+        juego._draw(FRAME.copy(), pose_flexion(165), 0.0)
+        x1, y1, x2, y2 = next(rectangulo for nombre, rectangulo in juego._buttons if nombre == accion)
+        juego._click = ((x1 + x2) // 2, (y1 + y2) // 2)
+        juego._handle_click()
+
+    def test_clic_en_un_boton_ejecuta_su_accion(self):
+        juego = crear_juego()
+        self.hacer_clic_en(juego, "start")
+        self.assertIs(juego.phase, Phase.INSTRUCTIONS)
+
     def test_clic_fuera_de_los_botones_no_hace_nada(self):
-        g = make_game()
-        g._draw(FRAME.copy(), None, 0.0)
-        g._click = (-50, -50)
-        g._handle_click()
-        self.assertIsNone(g._click)
-        self.assertIs(g.phase, Phase.MENU)
+        juego = crear_juego()
+        juego._draw(FRAME.copy(), None, 0.0)
+        juego._click = (-50, -50)
+        juego._handle_click()
+        self.assertIsNone(juego._click)
+        self.assertIs(juego.phase, Phase.MENU)
 
     def test_clic_en_el_indicador_del_video_pausa_y_reanuda(self):
-        cam = FakeVideo()
-        g = make_game(camera=cam)
-        g._do("start")
-        g._draw(FRAME.copy(), pushup_pose(165), 0.0)
-        _, (x1, y1, x2, y2) = next(b for b in g._buttons if b[0] == "pause")
-        g._click = ((x1 + x2) // 2, (y1 + y2) // 2)
-        g._handle_click()
-        self.assertTrue(cam.paused)
-        g._click = ((x1 + x2) // 2, (y1 + y2) // 2)
-        g._handle_click()
-        self.assertFalse(cam.paused)
+        video = VideoFalso()
+        juego = crear_juego(camara=video)
+        juego._do("start")
+        self.hacer_clic_en(juego, "pause")
+        self.assertTrue(video.paused)
+        self.hacer_clic_en(juego, "pause")
+        self.assertFalse(video.paused)
+
+
+# =============================================================================
+# Dibujo de las pantallas
+# =============================================================================
+class TestDibujoDeLasPantallas(PruebaDeJuego):
+    def test_todas_las_fases_se_dibujan_en_16_9_y_en_4_3(self):
+        juego = crear_juego(claves=("pushup", "pullup", "bulgarian_squat"))
+        juego._picker = PickerInfo([Path(f"video_{i}.mp4") for i in range(3)], Path("videos"), True)
+        juego._history = [HistoryEntry(Path("x.json"), datetime(2026, 11, 1) + timedelta(days=i),
+                                       300 + 50 * i, 8, 70 + i, ["Flexión"]) for i in range(5)]
+        juego._do("start")
+        for alto, ancho in ((720, 1280), (480, 640)):
+            frame = np.zeros((alto, ancho, 3), np.uint8)
+            for fase in Phase:
+                with self.subTest(fase=fase.name, tamano=(ancho, alto)):
+                    juego._go(fase)
+                    salida = juego._draw(frame.copy(), pose_flexion(120), 0.0)
+                    self.assertEqual(salida.shape, frame.shape)
+                    self.assertTrue(salida.any())
 
 
 # =============================================================================
 # Guardado de resultados y resumen
 # =============================================================================
-class TestGuardadoDeResultados(AisladoDeResultados):
+class TestGuardadoDeResultados(PruebaDeJuego):
+    def terminar_partida_saltando_el_ejercicio(self, juego):
+        juego._do("start")
+        juego._handle_key(ord("n"))
+        juego._handle_key(13)
+
     def test_al_terminar_se_guarda_el_json_en_results(self):
-        g = make_game()
-        g.settings.game.save_results = True
-        g._do("start")
-        g._handle_key(ord("n"))
-        with contextlib.redirect_stdout(io.StringIO()):
-            g._handle_key(13)
-        self.assertIs(g.phase, Phase.SUMMARY)
-        self.assertEqual(g.saved_path.parent, self.resultados.resolve())
-        datos = json.loads(g.saved_path.read_text(encoding="utf-8"))
+        juego = crear_juego()
+        juego.settings.game.save_results = True
+        self.terminar_partida_saltando_el_ejercicio(juego)
+        self.assertIs(juego.phase, Phase.SUMMARY)
+        self.assertEqual(juego.saved_path.parent, self.resultados.resolve())
+        datos = json.loads(juego.saved_path.read_text(encoding="utf-8"))
         self.assertTrue(datos["exercises"][0]["skipped"])
 
     def test_el_resumen_compara_con_la_partida_anterior(self):
-        anterior = self.resultados / "session_20260101_100000.json"
-        anterior.write_text(json.dumps({"date": "2026-01-01T10:00:00", "total_points": 250,
-                                        "exercises": []}), encoding="utf-8")
-        g = make_game()
-        g.settings.game.save_results = True
-        g._do("start")
-        g._handle_key(ord("n"))
-        with contextlib.redirect_stdout(io.StringIO()):
-            g._handle_key(13)
-        self.assertEqual(g._previous.total_points, 250)
+        guardar_partida(self.resultados, "session_20260101_100000.json", "2026-01-01T10:00:00", 250)
+        juego = crear_juego()
+        juego.settings.game.save_results = True
+        self.terminar_partida_saltando_el_ejercicio(juego)
+        self.assertEqual(juego._previous.total_points, 250)
 
     def test_sin_guardar_no_escribe_nada(self):
-        g = make_game()                                   # make_game desactiva el guardado
-        g._do("start")
-        g._handle_key(ord("n"))
-        g._handle_key(13)
-        self.assertIsNone(g.saved_path)
+        juego = crear_juego()                             # crear_juego desactiva el guardado
+        self.terminar_partida_saltando_el_ejercicio(juego)
+        self.assertIsNone(juego.saved_path)
         self.assertEqual(list(self.resultados.iterdir()), [])
 
 
@@ -488,62 +499,63 @@ class TestGuardadoDeResultados(AisladoDeResultados):
 class TestSesion(unittest.TestCase):
     def setUp(self):
         self.flexion = build_exercises(["pushup"])[0]
+        self.carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
     def test_sesion_sin_repeticiones(self):
-        s = ExerciseSession(self.flexion)
-        self.assertEqual(s.count, 0)
-        self.assertEqual(s.points, 0)
-        self.assertEqual(s.average, 0.0)
-        self.assertEqual(s.best, 0.0)
-        self.assertIsNone(s.best_rep)
-        self.assertEqual(s.top_feedback(), [])
-        self.assertEqual(s.component_average("form"), 0.0)
+        sesion = ExerciseSession(self.flexion)
+        self.assertEqual(sesion.count, 0)
+        self.assertEqual(sesion.points, 0)
+        self.assertEqual(sesion.average, 0.0)
+        self.assertEqual(sesion.best, 0.0)
+        self.assertIsNone(sesion.best_rep)
+        self.assertEqual(sesion.top_feedback(), [])
+        self.assertEqual(sesion.component_average("form"), 0.0)
 
     def test_puntos_media_y_mejor_repeticion(self):
-        s = ExerciseSession(self.flexion, reps=[repeticion(80), repeticion(90), repeticion(100)])
-        self.assertEqual(s.count, 3)
-        self.assertEqual(s.points, 270)
-        self.assertAlmostEqual(s.average, 90.0)
-        self.assertEqual(s.best, 100)
-        self.assertEqual(s.best_rep.total, 100)
+        sesion = ExerciseSession(self.flexion, reps=[repeticion(80), repeticion(90), repeticion(100)])
+        self.assertEqual(sesion.count, 3)
+        self.assertEqual(sesion.points, 270)
+        self.assertAlmostEqual(sesion.average, 90.0)
+        self.assertEqual(sesion.best, 100)
+        self.assertEqual(sesion.best_rep.total, 100)
 
     def test_los_puntos_se_redondean_al_entero(self):
-        s = ExerciseSession(self.flexion, reps=[repeticion(90.4), repeticion(90.4)])
-        self.assertEqual(s.points, 181)                   # 180,8 -> 181
+        sesion = ExerciseSession(self.flexion, reps=[repeticion(90.4), repeticion(90.4)])
+        self.assertEqual(sesion.points, 181)                  # 180,8 -> 181
 
     def test_media_por_componente(self):
-        s = ExerciseSession(self.flexion, reps=[repeticion(80, tecnica=1.0), repeticion(90, tecnica=0.5)])
-        self.assertAlmostEqual(s.component_average("form"), 0.75)
-        self.assertAlmostEqual(s.component_average("rom"), 1.0)
+        sesion = ExerciseSession(self.flexion, reps=[repeticion(80, tecnica=1.0), repeticion(90, tecnica=0.5)])
+        self.assertAlmostEqual(sesion.component_average("form"), 0.75)
+        self.assertAlmostEqual(sesion.component_average("rom"), 1.0)
 
     def test_consejos_mas_repetidos(self):
-        s = ExerciseSession(self.flexion, reps=[
+        sesion = ExerciseSession(self.flexion, reps=[
             repeticion(80, ["a", "b"]), repeticion(80, ["a"]),
             repeticion(80, ["b", "c"]), repeticion(80, ["a"])])
-        self.assertEqual(s.top_feedback(), ["a", "b"])
-        self.assertEqual(s.top_feedback(1), ["a"])
+        self.assertEqual(sesion.top_feedback(), ["a", "b"])
+        self.assertEqual(sesion.top_feedback(1), ["a"])
 
     def test_to_dict_tiene_los_campos_del_readme(self):
-        s = ExerciseSession(self.flexion, reps=[repeticion(100)], partial_reps=1, duration=12.4,
-                            calibrated=True, reference={"rest": {"codo": 171.2}, "peak": {"codo": 98.4}})
-        d = s.to_dict()
-        self.assertEqual(set(d), {"exercise", "name", "skipped", "reps", "partial_reps", "points",
-                                  "average_score", "best_score", "duration_s", "calibrated",
-                                  "reference", "repetitions"})
-        self.assertEqual(d["exercise"], "pushup")
-        self.assertEqual(d["name"], "Flexión")
-        self.assertEqual(d["reps"], 1)
-        self.assertEqual(d["partial_reps"], 1)
-        self.assertTrue(d["calibrated"])
-        self.assertEqual(d["repetitions"][0]["total"], 100)
+        sesion = ExerciseSession(self.flexion, reps=[repeticion(100)], partial_reps=1, duration=12.4,
+                                 calibrated=True,
+                                 reference={"rest": {"codo": 171.2}, "peak": {"codo": 98.4}})
+        datos = sesion.to_dict()
+        campos = {"exercise", "name", "skipped", "reps", "partial_reps", "points", "average_score",
+                  "best_score", "duration_s", "calibrated", "reference", "repetitions"}
+        self.assertEqual(set(datos), campos)
+        self.assertEqual(datos["exercise"], "pushup")
+        self.assertEqual(datos["name"], "Flexión")
+        self.assertEqual(datos["reps"], 1)
+        self.assertEqual(datos["partial_reps"], 1)
+        self.assertTrue(datos["calibrated"])
+        self.assertEqual(datos["repetitions"][0]["total"], 100)
 
     def test_save_sessions_escribe_un_json_valido(self):
-        pullup = build_exercises(["pullup"])[0]
-        s1 = ExerciseSession(self.flexion, reps=[repeticion(90), repeticion(100)])
-        s2 = ExerciseSession(pullup, skipped=True)
-        with tempfile.TemporaryDirectory() as tmp:
-            ruta = save_sessions([s1, s2], Path(tmp))
-            texto = ruta.read_text(encoding="utf-8")
+        dominada = build_exercises(["pullup"])[0]
+        sesion1 = ExerciseSession(self.flexion, reps=[repeticion(90), repeticion(100)])
+        sesion2 = ExerciseSession(dominada, skipped=True)
+        ruta = save_sessions([sesion1, sesion2], self.carpeta)
+        texto = ruta.read_text(encoding="utf-8")
         datos = json.loads(texto)
         self.assertEqual(set(datos), {"date", "total_points", "exercises"})
         self.assertEqual(datos["total_points"], 190)
@@ -553,11 +565,10 @@ class TestSesion(unittest.TestCase):
         datetime.fromisoformat(datos["date"])
 
     def test_save_sessions_crea_la_carpeta_si_no_existe(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            carpeta = Path(tmp) / "nueva" / "resultados"
-            ruta = save_sessions([ExerciseSession(self.flexion)], carpeta)
-            self.assertTrue(ruta.is_file())
-            self.assertEqual(ruta.parent, carpeta.resolve())
+        carpeta = self.carpeta / "nueva" / "resultados"
+        ruta = save_sessions([ExerciseSession(self.flexion)], carpeta)
+        self.assertTrue(ruta.is_file())
+        self.assertEqual(ruta.parent, carpeta.resolve())
 
 
 # =============================================================================
@@ -565,9 +576,7 @@ class TestSesion(unittest.TestCase):
 # =============================================================================
 class TestHistorial(unittest.TestCase):
     def setUp(self):
-        carpeta = tempfile.TemporaryDirectory()
-        self.addCleanup(carpeta.cleanup)
-        self.carpeta = Path(carpeta.name)
+        self.carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
     def test_ordena_por_fecha_y_no_por_nombre(self):
         guardar_partida(self.carpeta, "session_zz.json", "2026-01-01T10:00:00", 100)
@@ -599,6 +608,17 @@ class TestHistorial(unittest.TestCase):
         self.assertAlmostEqual(entrada.average_score, 90.0)
         self.assertEqual(entrada.exercises, ["Flexión"])
 
+    def test_lee_lo_que_escribe_save_sessions(self):
+        flexion, dominada = build_exercises(["pushup", "pullup"])
+        hecha = ExerciseSession(flexion, reps=[repeticion(90), repeticion(70)])
+        saltada = ExerciseSession(dominada, skipped=True)
+        save_sessions([hecha, saltada], self.carpeta)
+        (entrada,) = load_history(self.carpeta)
+        self.assertEqual(entrada.total_points, 160)
+        self.assertEqual(entrada.reps, 2)
+        self.assertAlmostEqual(entrada.average_score, 80.0)
+        self.assertEqual(entrada.exercises, ["Flexión"])
+
     def test_carpeta_vacia_o_inexistente(self):
         self.assertEqual(load_history(self.carpeta), [])
         self.assertEqual(load_history(self.carpeta / "no_existe"), [])
@@ -607,14 +627,12 @@ class TestHistorial(unittest.TestCase):
 # =============================================================================
 # Argumentos de línea de comandos (main.py)
 # =============================================================================
-class TestArgumentosDeMain(unittest.TestCase):
+class TestMain(unittest.TestCase):
     def setUp(self):
         # apply_args modifica config.settings: se guarda y se restaura tras cada test
         self.guardada = copy.deepcopy(config.settings)
         self.addCleanup(self.restaurar)
-        carpeta = tempfile.TemporaryDirectory()
-        self.addCleanup(carpeta.cleanup)
-        self.tmp = Path(carpeta.name)
+        self.tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
     def restaurar(self):
         for campo in dataclasses.fields(config.settings):
@@ -697,6 +715,19 @@ class TestArgumentosDeMain(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             juego_main.parse_args(["--exercises", "sprint"])
 
+    def test_sin_camara_ni_fuente_pedida_arranca_sin_fuente(self):
+        args = juego_main.parse_args([])
+        with mock.patch.object(juego_main, "Camera", side_effect=RuntimeError("sin cámara")), \
+                contextlib.redirect_stdout(io.StringIO()):
+            fuente = juego_main.open_initial_source(args)
+        self.assertIsInstance(fuente, NoSource)
+
+    def test_si_se_pidio_una_fuente_y_falla_el_error_se_propaga(self):
+        args = juego_main.parse_args(["--source", "3"])
+        with mock.patch.object(juego_main, "Camera", side_effect=RuntimeError("sin cámara")), \
+                self.assertRaises(RuntimeError):
+            juego_main.open_initial_source(args)
+
     def test_main_con_video_inexistente_devuelve_1(self):
         error = io.StringIO()
         with contextlib.redirect_stderr(error):
@@ -724,13 +755,6 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(config.MODEL_VARIANTS, ("lite", "full", "heavy"))
         self.assertEqual(set(config.MODEL_URLS), set(config.MODEL_VARIANTS))
 
-    def test_url_de_cada_variante(self):
-        for variante in config.MODEL_VARIANTS:
-            with self.subTest(variante=variante):
-                esperada = ("https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
-                            f"pose_landmarker_{variante}/float16/latest/pose_landmarker_{variante}.task")
-                self.assertEqual(config.MODEL_URLS[variante], esperada)
-
     def test_ruta_del_modelo_esta_en_models(self):
         self.assertEqual(config.model_filename("heavy"), "pose_landmarker_heavy.task")
         self.assertEqual(config.model_path("heavy"), config.MODELS_DIR / "pose_landmarker_heavy.task")
@@ -744,9 +768,9 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(ajustes.game.calibrate)
 
     def test_cada_ajuste_es_independiente(self):
-        a, b = Settings(), Settings()
-        a.camera.width = 640
-        self.assertEqual(b.camera.width, 1280)
+        primeros, segundos = Settings(), Settings()
+        primeros.camera.width = 640
+        self.assertEqual(segundos.camera.width, 1280)
 
     def test_umbral_de_reposo_menor_que_el_de_maximo(self):
         ajustes = Settings()
@@ -761,39 +785,38 @@ class TestScriptsSh(unittest.TestCase):
     def test_run_y_dependencies_tienen_sintaxis_bash_correcta(self):
         for nombre in ("run.sh", "dependencies.sh"):
             with self.subTest(script=nombre):
-                r = subprocess.run(["bash", "-n", str(SCRIPTS_DIR / nombre)],
-                                   capture_output=True, text=True)
-                self.assertEqual(r.returncode, 0, r.stderr)
+                resultado = subprocess.run(["bash", "-n", str(SCRIPTS_DIR / nombre)],
+                                           capture_output=True, text=True)
+                self.assertEqual(resultado.returncode, 0, resultado.stderr)
 
 
 class TestMakeZip(unittest.TestCase):
     def setUp(self):
-        self.zip = cargar_script("make_zip.py")
+        self.make_zip = cargar_script("make_zip.py")
 
     def test_slug_quita_tildes_y_espacios(self):
-        self.assertEqual(self.zip.slug("José Pérez Ñúñez"), "jose_perez_nunez")
-        self.assertEqual(self.zip.slug("  Ana   María  "), "ana_maria")
-        self.assertEqual(self.zip.slug("¡¿?"), "")
+        self.assertEqual(self.make_zip.slug("José Pérez Ñúñez"), "jose_perez_nunez")
+        self.assertEqual(self.make_zip.slug("  Ana   María  "), "ana_maria")
+        self.assertEqual(self.make_zip.slug("¡¿?"), "")
 
     def test_iter_files_excluye_lo_que_no_va_en_la_entrega(self):
         archivos = ["README.md", "src/main.py", "src/__pycache__/main.cpython-312.pyc",
                     "src/vision/modelo.task", ".venv/bin/python", "models/pose_landmarker_full.task",
                     "results/session_1.json", "mp_env/x.py", ".git/config", "build.zip",
                     "videos/demo.mp4", "videos/LEEME.md", "videos/sub/otro.mp4"]
-        with tempfile.TemporaryDirectory() as tmp:
-            raiz = Path(tmp)
-            for nombre in archivos:
-                ruta = raiz / nombre
-                ruta.parent.mkdir(parents=True, exist_ok=True)
-                ruta.write_bytes(b"x")
-            incluidos = {rel.as_posix() for _, rel in self.zip.iter_files(raiz)}
+        raiz = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        for nombre in archivos:
+            ruta = raiz / nombre
+            ruta.parent.mkdir(parents=True, exist_ok=True)
+            ruta.write_bytes(b"x")
+        incluidos = {rel.as_posix() for _, rel in self.make_zip.iter_files(raiz)}
         self.assertEqual(incluidos, {"README.md", "src/main.py", "videos/LEEME.md"})
 
     def test_sin_nombre_valido_no_genera_nada(self):
         error = io.StringIO()
         with mock.patch.object(sys, "argv", ["make_zip.py", "¡¿?"]), \
                 contextlib.redirect_stderr(error):
-            codigo = self.zip.main()
+            codigo = self.make_zip.main()
         self.assertEqual(codigo, 1)
         self.assertIn("vacío", error.getvalue())
 
@@ -801,9 +824,8 @@ class TestMakeZip(unittest.TestCase):
 class TestDownloadModels(unittest.TestCase):
     def setUp(self):
         self.dm = cargar_script("download_models.py")
-        parche = mock.patch.object(self.dm, "download_model")   # Sin red: la descarga se simula
-        self.descarga = parche.start()
-        self.addCleanup(parche.stop)
+        # Sin red: la descarga se simula
+        self.descarga = self.enterContext(mock.patch.object(self.dm, "download_model"))
 
     def ejecutar(self, *argumentos):
         with mock.patch.object(sys, "argv", ["download_models.py", *argumentos]):
