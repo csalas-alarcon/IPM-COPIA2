@@ -150,9 +150,16 @@ Sin terminal: lanza el juego sin opciones, pulsa **Abrir vídeo… (V)** y elige
 `videos/` o con **Buscar en el ordenador…**.
 
 En [`videos/`](videos/) hay cuatro vídeos de demostración de Wikimedia Commons, ya probados con
-el juego: dos de flexiones, uno de sentadilla búlgara y uno de dominadas. Qué ejercicio marcar
-con cada uno está en [`videos/LEEME.md`](videos/LEEME.md) y su origen en
-[`videos/CREDITOS.md`](videos/CREDITOS.md).
+el juego. Al elegir uno, marca en el menú solo su ejercicio:
+
+| Vídeo | Ejercicio |
+|---|---|
+| `flexiones_playa.mp4` | Flexión |
+| `flexiones_kettlebell.mp4` | Flexión (pulsa **Empezar ya** en las instrucciones) |
+| `sentadilla_bulgara_lateral.mp4` | Sentadilla búlgara |
+| `dominadas_espalda.mp4` | Dominada |
+
+Su origen, autoría y licencia están en [`videos/CREDITOS.md`](videos/CREDITOS.md).
 
 Cómo se comporta con un vídeo:
 
@@ -543,7 +550,8 @@ un reloj propio. Así ninguna depende de la velocidad de la máquina ni del orde
 ```
 
 Quita tildes y espacios del nombre y excluye `.venv/`, `models/`, `results/`, `.git/`, cachés,
-los `.task` y los vídeos de `videos/` (pesan mucho; entrégalos aparte). El receptor lo despliega
+los `.task` y los vídeos propios que hayas copiado en `videos/` (los cuatro de demostración sí
+van dentro). El receptor lo despliega
 con `scripts/dependencies.sh` o `.bat`.
 
 ---
@@ -631,4 +639,5 @@ con `scripts/dependencies.sh` o `.bat`.
   partidas de `tests/test_logic.py`.
 - **Dependencias:** compatibles con Python 3.11-3.12, `numpy < 2` y `protobuf < 5` (restricciones
   de mediapipe 0.10.21).
-- **No versionar:** `.venv/`, `models/`, `results/`, `*.zip` y los vídeos de `videos/`.
+- **No versionar:** `.venv/`, `models/`, `results/`, `*.zip` ni otros vídeos de `videos/` aparte
+  de los cuatro de demostración (ya está en `.gitignore`).

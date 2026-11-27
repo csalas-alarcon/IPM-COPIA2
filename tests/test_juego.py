@@ -772,15 +772,17 @@ class TestMakeZip(unittest.TestCase):
     def test_iter_files_excluye_lo_que_no_va_en_la_entrega(self):
         archivos = ["README.md", "src/main.py", "src/__pycache__/main.cpython-312.pyc",
                     "src/vision/modelo.task", ".venv/bin/python", "models/pose_landmarker_full.task",
-                    "results/session_1.json", "mp_env/x.py", ".git/config", "build.zip",
-                    "videos/demo.mp4", "videos/LEEME.md", "videos/sub/otro.mp4"]
+                    "results/session_1.json", ".git/config", "build.zip",
+                    "videos/flexiones_playa.mp4", "videos/CREDITOS.md",
+                    "videos/mi_grabacion.mp4", "videos/sub/otro.mp4"]
         raiz = Path(self.enterContext(tempfile.TemporaryDirectory()))
         for nombre in archivos:
             ruta = raiz / nombre
             ruta.parent.mkdir(parents=True, exist_ok=True)
             ruta.write_bytes(b"x")
         incluidos = {rel.as_posix() for _, rel in self.make_zip.iter_files(raiz)}
-        self.assertEqual(incluidos, {"README.md", "src/main.py", "videos/LEEME.md"})
+        self.assertEqual(incluidos, {"README.md", "src/main.py", "videos/flexiones_playa.mp4",
+                                     "videos/CREDITOS.md"})
 
     def test_sin_nombre_valido_no_genera_nada(self):
         error = io.StringIO()

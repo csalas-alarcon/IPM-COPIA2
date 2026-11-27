@@ -24,9 +24,11 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from config import VIDEO_EXTENSIONS  # noqa: E402
 
-EXCLUDED_DIRS = {".venv", "venv", "mp_env", ".git", "models", "results", "__pycache__",
-                 ".pytest_cache", ".mypy_cache", ".ruff_cache", ".idea", ".vscode"}
-EXCLUDED_SUFFIXES = {".task", ".part", ".pyc", ".pyo", ".zip"}
+EXCLUDED_DIRS = {".venv", "venv", ".git", "models", "results", "__pycache__", ".idea", ".vscode"}
+EXCLUDED_SUFFIXES = {".task", ".part", ".pyc", ".zip"}
+# De la carpeta videos/ solo van en el .zip los vídeos de demostración
+DEMO_VIDEOS = {"flexiones_playa.mp4", "flexiones_kettlebell.mp4",
+               "sentadilla_bulgara_lateral.mp4", "dominadas_espalda.mp4"}
 
 
 def slug(text: str) -> str:
@@ -39,8 +41,8 @@ def iter_files(root: Path):
         rel = path.relative_to(root)
         if any(part in EXCLUDED_DIRS for part in rel.parts):
             continue
-        # Los vídeos de videos/ pesan mucho: se entregan aparte
-        if rel.parts[0] == "videos" and path.suffix.lower() in VIDEO_EXTENSIONS:
+        is_video = path.suffix.lower() in VIDEO_EXTENSIONS
+        if rel.parts[0] == "videos" and is_video and path.name not in DEMO_VIDEOS:
             continue
         if path.is_file() and path.suffix not in EXCLUDED_SUFFIXES:
             yield path, rel
