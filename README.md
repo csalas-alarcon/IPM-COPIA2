@@ -183,6 +183,11 @@ bash scripts/run.sh --video demo.mp4                                  # los tres
 scripts\run.bat --video demo.mp4 --exercises pushup bulgarian_squat   # Windows
 ```
 
+**Vídeos de demostración incluidos:** en [`videos/`](videos/) hay 4 vídeos de Wikimedia Commons ya
+preparados y probados con el juego: flexiones (2), sentadilla búlgara y dominadas. Ver
+[`videos/LEEME.md`](videos/LEEME.md) (qué ejercicio marcar con cada uno) y
+[`videos/CREDITOS.md`](videos/CREDITOS.md) (origen y licencias).
+
 **Sin terminal:** lanza el juego sin opciones (`bash scripts/run.sh`, o doble clic en
 `scripts\run.bat`) y en el menú pulsa **Abrir vídeo… (V)**. Aparecen los vídeos de la carpeta
 [`videos/`](videos/) del proyecto (cópialos ahí) y un botón **Buscar en el ordenador…** que abre

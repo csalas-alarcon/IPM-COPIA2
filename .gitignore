@@ -235,3 +235,9 @@ results/
 # Vídeos de prueba / demostración (pesan mucho)
 videos/*
 !videos/LEEME.md
+!videos/CREDITOS.md
+# Vídeos de demostración (Wikimedia Commons, editados) que sí se versionan
+!videos/flexiones_playa.mp4
+!videos/flexiones_kettlebell.mp4
+!videos/sentadilla_bulgara_lateral.mp4
+!videos/dominadas_espalda.mp4

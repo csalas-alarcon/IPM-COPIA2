@@ -356,7 +356,8 @@ def draw_hud(c: Canvas, session, state: TrackerState, time_left: float, target: 
     ex = session.exercise
     # Marcador superior izquierdo
     c.panel(20, 20, 400, 214, alpha=0.65)
-    c.text(ex.name, 40, 36, 28, ACCENT, "la", bold=True)
+    name_size = 28 if c.text_width(ex.name, 28, True) <= 250 else 22   # "Sentadilla búlgara" no pisa el tiempo
+    c.text(ex.name, 40, 36 + (28 - name_size) / 2, name_size, ACCENT, "la", bold=True)
     count = str(session.count)
     c.text(count, 40, 76, 80, WHITE, "la", bold=True)
     c.text(f"/ {target} reps", 40 + c.text_width(count, 80, True) + 12, 120, 26, GREY, "la")
