@@ -16,9 +16,9 @@ for %%V in (3.12 3.11) do (
     )
 )
 if not defined PY_CMD (
-    for /f "delims=" %%v in ('python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" 2^>nul') do (
-        if "%%v"=="3.12" set "PY_CMD=python"
-        if "%%v"=="3.11" set "PY_CMD=python"
+    for /f "delims=" %%v in ('python -c "import sys; print(sys.version_info[0], sys.version_info[1])" 2^>nul') do (
+        if "%%v"=="3 12" set "PY_CMD=python"
+        if "%%v"=="3 11" set "PY_CMD=python"
     )
 )
 if not defined PY_CMD (

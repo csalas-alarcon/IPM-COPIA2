@@ -1,17 +1,11 @@
 """
-config.py  ·  Configuración central del proyecto.
+Configuración central: rutas absolutas, URLs de los modelos, fuentes y todos
+los parámetros ajustables (cámara, modelo, juego y puntuación).
 
-Rutas absolutas, URLs de los modelos, fuentes y todos los parámetros
-ajustables (cámara, modelo, juego y puntuación).
-
-Todas las rutas se calculan como rutas ABSOLUTAS a partir de la ubicación de
-este archivo, de modo que el programa funciona igual se lance desde donde se
-lance (raíz del repo, carpeta src/, IDE, script...).
+Las rutas se calculan a partir de la ubicación de este archivo, así que el
+programa funciona igual se lance desde donde se lance.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import os
@@ -19,14 +13,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-# =============================================================================
-# Rutas absolutas
-# =============================================================================
-SRC_DIR: Path = Path(__file__).resolve().parent                  # .../src
-PROJECT_ROOT: Path = SRC_DIR.parent                              # .../IPM_Prac_2
+# --- Rutas ---
+SRC_DIR: Path = Path(__file__).resolve().parent
+PROJECT_ROOT: Path = SRC_DIR.parent
 SCRIPTS_DIR: Path = PROJECT_ROOT / "scripts"
 
-# Se pueden sobreescribir con variables de entorno (siempre se resuelven a absolutas)
+# Se pueden cambiar con variables de entorno
 MODELS_DIR: Path = Path(
     os.environ.get("POSE_GAME_MODELS_DIR", PROJECT_ROOT / "models")
 ).expanduser().resolve()
@@ -40,9 +32,7 @@ VIDEOS_DIR: Path = Path(
 VIDEO_EXTENSIONS: tuple[str, ...] = (".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg", ".wmv")
 
 
-# =============================================================================
-# Modelos de MediaPipe Pose Landmarker
-# =============================================================================
+# --- Modelos de MediaPipe ---
 _MODEL_BASE_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker"
 MODEL_VARIANTS: tuple[str, ...] = ("lite", "full", "heavy")
 MODEL_URLS: dict[str, str] = {
@@ -59,9 +49,7 @@ def model_path(variant: str) -> Path:
     return MODELS_DIR / model_filename(variant)
 
 
-# =============================================================================
-# Fuentes (para poder pintar tildes y eñes; cv2.putText no las soporta)
-# =============================================================================
+# --- Fuentes (cv2.putText no pinta tildes, así que se dibuja con una fuente del sistema) ---
 _WINDIR = Path(os.environ.get("WINDIR", "C:/Windows"))
 FONT_CANDIDATES: tuple[Path, ...] = (
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
@@ -83,13 +71,10 @@ BOLD_FONT_CANDIDATES: tuple[Path, ...] = (
 )
 
 
-# =============================================================================
-# Parámetros
-# =============================================================================
+# --- Parámetros ---
 @dataclass
 class CameraConfig:
-    # Índice de la webcam (0, 1, ...) o URL de un stream (p. ej. la cámara del
-    # móvil con IP Webcam / DroidCam: "http://192.168.1.20:8080/video").
+    # Índice de la webcam, URL de un stream (cámara del móvil) o ruta de un vídeo
     source: int | str = 0
     width: int = 1280
     height: int = 720
@@ -106,13 +91,8 @@ class ModelConfig:
     min_pose_detection_confidence: float = 0.5
     min_pose_presence_confidence: float = 0.5
     min_tracking_confidence: float = 0.5
-    # Usar las coordenadas 3D "world" (en metros) para calcular ángulos.
-    # Son más robustas a la posición de la cámara que las 2D de la imagen.
+    # Ángulos con las coordenadas 3D "world": no dependen de la posición de la cámara
     use_world_landmarks: bool = True
-
-    @property
-    def path(self) -> Path:
-        return model_path(self.variant)
 
 
 @dataclass
@@ -132,7 +112,7 @@ class GameConfig:
     sound: bool = True               # Pitidos de cuenta atrás, repeticiones...
     record_path: str | None = None   # Grabar lo que muestra la ventana en este .mp4
     record_fps: float = 30.0
-    # --- Calibración: repetición de prueba antes de cada ejercicio -----------
+    # Calibración (repetición de prueba antes de cada ejercicio)
     calibrate: bool = True
     calibration_timeout: float = 20.0      # s para hacer la repetición de prueba
     calibration_min_progress: float = 0.5  # Profundidad mínima (respecto a la referencia estándar)
@@ -171,4 +151,4 @@ class Settings:
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
 
 
-settings = Settings()  # Instancia única
+settings = Settings()

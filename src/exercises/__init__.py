@@ -1,13 +1,6 @@
 """
-exercises/  ·  Definición de los ejercicios.
+Definición de los ejercicios: base.py (clase Exercise), un archivo por ejercicio
+y catalog.py (EXERCISES y build_exercises).
 
-Archivos:
-    base.py             Clase base Exercise (medición, progreso, utilidades).
-    pullup.py           Dominada.
-    pushup.py           Flexión.
-    bulgarian_squat.py  Sentadilla búlgara.
-    catalog.py          Catálogo EXERCISES y build_exercises().
-
-Importa siempre el módulo concreto, p. ej.
-``from exercises.catalog import build_exercises``.
+Importa siempre el módulo concreto, p. ej. ``from exercises.catalog import build_exercises``.
 """

@@ -1,13 +1,8 @@
 """
-vision/models.py  ·  Modelos de MediaPipe.
-
-Descarga y localiza los archivos .task del Pose Landmarker.
-No importa OpenCV ni MediaPipe, para que scripts/download_models.py sea ligero.
+Descarga y localiza los modelos .task del Pose Landmarker. No importa OpenCV
+ni MediaPipe, para que scripts/download_models.py sea ligero.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import os
@@ -19,15 +14,9 @@ import tqdm
 from config import MODEL_URLS, MODEL_VARIANTS, MODELS_DIR, model_path
 
 
-# =============================================================================
-# Constantes
-# =============================================================================
 _MIN_MODEL_BYTES = 1_000_000  # Un .task válido pesa varios MB
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def _is_valid(path: Path) -> bool:
     return path.is_file() and path.stat().st_size >= _MIN_MODEL_BYTES
 
@@ -56,7 +45,7 @@ def download_model(variant: str, force: bool = False, timeout: float = 30.0) -> 
                     bar.update(len(chunk))
         if not _is_valid(tmp):
             raise RuntimeError("El archivo descargado es demasiado pequeño; descarga corrupta.")
-        os.replace(tmp, dest)  # Escritura atómica: nunca queda un .task a medias
+        os.replace(tmp, dest)  # Así nunca queda un .task a medias
     except Exception:
         tmp.unlink(missing_ok=True)
         raise

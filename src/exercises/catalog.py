@@ -1,13 +1,7 @@
 """
-exercises/catalog.py  ·  Catálogo de ejercicios.
-
-Para añadir un ejercicio nuevo, crea su archivo en exercises/ y regístralo
-en EXERCISES.
+Catálogo de ejercicios. Para añadir uno, crea su archivo y regístralo en EXERCISES.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from exercises.base import Exercise
@@ -16,9 +10,6 @@ from exercises.pullup import PullUp
 from exercises.pushup import PushUp
 
 
-# =============================================================================
-# Constantes
-# =============================================================================
 EXERCISES: dict[str, type[Exercise]] = {
     PullUp.key: PullUp,
     PushUp.key: PushUp,
@@ -26,9 +17,6 @@ EXERCISES: dict[str, type[Exercise]] = {
 }
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def build_exercises(keys) -> list[Exercise]:
     unknown = [k for k in keys if k not in EXERCISES]
     if unknown:

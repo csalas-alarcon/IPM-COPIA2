@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """
-scripts/make_zip.py  ·  Generación del .zip de entrega.
-
 Genera el .zip de entrega con el nombre de los integrantes.
 
-No incluye .venv, modelos, resultados, cachés ni .git (el código debe poder
-desplegarse en un equipo limpio con scripts/dependencies.sh|.bat).
+No incluye .venv, modelos, resultados, cachés ni .git: el código debe poder
+desplegarse en un equipo limpio con scripts/dependencies.sh o .bat.
 
 Uso:
     python scripts/make_zip.py nombre_apellido1_apellido2 [otro_nombre_apellido1_apellido2]
     -> <raíz>/nombre_apellido1_apellido2_otro_nombre_apellido1_apellido2.zip
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import argparse
@@ -24,22 +19,16 @@ import unicodedata
 import zipfile
 from pathlib import Path
 
-
-# =============================================================================
-# Constantes
-# =============================================================================
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from config import VIDEO_EXTENSIONS  # noqa: E402
 
 EXCLUDED_DIRS = {".venv", "venv", "mp_env", ".git", "models", "results", "__pycache__",
                  ".pytest_cache", ".mypy_cache", ".ruff_cache", ".idea", ".vscode"}
 EXCLUDED_SUFFIXES = {".task", ".part", ".pyc", ".pyo", ".zip"}
-# Los vídeos de videos/ pesan mucho: no se meten en el .zip (se entregan aparte)
-VIDEO_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg", ".wmv"}
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def slug(text: str) -> str:
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
@@ -50,15 +39,13 @@ def iter_files(root: Path):
         rel = path.relative_to(root)
         if any(part in EXCLUDED_DIRS for part in rel.parts):
             continue
-        if rel.parts[0] == "videos" and path.suffix.lower() in VIDEO_SUFFIXES:
+        # Los vídeos de videos/ pesan mucho: se entregan aparte
+        if rel.parts[0] == "videos" and path.suffix.lower() in VIDEO_EXTENSIONS:
             continue
         if path.is_file() and path.suffix not in EXCLUDED_SUFFIXES:
             yield path, rel
 
 
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("members", nargs="+", help="Nombre completo de cada integrante")

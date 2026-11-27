@@ -555,18 +555,18 @@ class TestCalibracion(unittest.TestCase):
         np.testing.assert_allclose(self.ex.peak_vector, [100.0])
         self.assertIs(self.ex.reference_profile, perfil)
 
-    def test_sin_datos_de_reposo_usa_el_primer_frame_grabado(self):
-        # Sin add_rest() el reposo sale del primer frame de la repetición. Con una
-        # subida brusca ese frame es reposo de verdad (172º).
+    def test_sin_datos_de_reposo_usa_el_frame_mas_cercano_al_reposo(self):
+        # Sin add_rest() y con una subida lenta, el último frame bajo el umbral ya va
+        # a mitad de recorrido (progreso ~0,2): el reposo debe salir del frame de
+        # menor progreso, que aquí es el de los 165º quietos del principio.
         cal = self.nuevo_calibrador()
-        reposo, maximo = np.array([172.0]), np.array([100.0])
-        progresos = [0.0] * 5 + [0.5, 0.8, 1.0, 1.0, 0.8, 0.5, 0.0]
+        reposo, maximo = np.array([165.0]), np.array([100.0])
         estado = None
-        for i, p in enumerate(progresos):
+        for i, p in enumerate(repeticion(1.0)):
             f = reposo + p * (maximo - reposo)
             estado = cal.update(i / 30, f, self.ex.progress(f)) or estado
         self.assertEqual(estado, "done")
-        self.assertAlmostEqual(float(cal.result.rest[0]), 172.0, places=6)
+        self.assertAlmostEqual(float(cal.result.rest[0]), 165.0, places=6)
         self.assertAlmostEqual(float(cal.result.peak[0]), 100.0, delta=2.0)
 
     def test_repeticion_que_no_llega_al_minimo_pide_repetir(self):

@@ -7,7 +7,7 @@
 #   4. Descarga los modelos de MediaPipe en <raíz>/models
 #
 #   source scripts/dependencies.sh   -> además deja el .venv activado en tu terminal
-#   bash   scripts/dependencies.sh   -> sólo instala
+#   bash   scripts/dependencies.sh   -> solo instala
 #
 # Variables opcionales:
 #   PYTHON=/ruta/a/python3.12  fuerza un intérprete concreto
@@ -68,7 +68,7 @@ _pose_setup() {
     echo "[setup] Descargando modelos"
     "$venv_dir/bin/python" "$project_root/scripts/download_models.py" || return 1
 
-    # Sólo tiene efecto en tu terminal si el script se ejecuta con `source`
+    # Solo tiene efecto en la terminal si el script se ejecuta con `source`
     # shellcheck disable=SC1091
     source "$venv_dir/bin/activate"
     echo "[setup] Listo. Lanza el juego con: bash scripts/run.sh"

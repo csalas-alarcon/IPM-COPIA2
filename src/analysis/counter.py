@@ -1,19 +1,16 @@
 """
-analysis/counter.py  ·  Conteo de repeticiones.
+Conteo de repeticiones.
 
-RepCounter: máquina de estados que cuenta repeticiones a partir del progreso (0..1).
+RepCounter es una máquina de estados sobre el progreso (0..1):
 
-    REPOSO --(p > rest)--> MOVIENDO --(p >= peak)--> PICO --(p <= rest)--> REP ✔
+    REPOSO --(p > rest)--> MOVIENDO --(p >= peak)--> PICO --(p <= rest)--> REP
                               |
                               +--(p <= rest sin llegar al pico)--> rep incompleta
 
-ExerciseTracker: une medición + suavizado + comprobación de postura + contador.
-Es lo que llama el juego en cada frame.
+ExerciseTracker une medición, suavizado, comprobación de postura y contador:
+es lo que llama el juego en cada frame.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -27,9 +24,6 @@ from exercises.base import Exercise, Measurement
 from vision.pose import PoseFrame
 
 
-# =============================================================================
-# Tipos de datos
-# =============================================================================
 class RepState(Enum):
     REST = auto()
     MOVING = auto()
@@ -63,16 +57,12 @@ class TrackerState:
     event: RepEvent | None = None
 
 
-# =============================================================================
-# RepCounter
-# =============================================================================
 class RepCounter:
     def __init__(self, exercise: Exercise, cfg: ScoringConfig):
         self.exercise = exercise
         self.cfg = cfg
         self.reset()
 
-    # --- Estado --------------------------------------------------------------
     def reset(self) -> None:
         self.state = RepState.REST
         self._samples: list[_Sample] = []
@@ -85,7 +75,6 @@ class RepCounter:
         self._max_p = 0.0
         self._last_rest = last
 
-    # --- Actualización por frame ---------------------------------------------
     def update(self, t: float, features: np.ndarray, progress: float,
                penalties: dict[str, float]) -> RepEvent | None:
         s = _Sample(t, np.array(features, dtype=float), float(progress), dict(penalties))
@@ -93,7 +82,7 @@ class RepCounter:
 
         if self.state is RepState.REST:
             if s.progress > cfg.rest_threshold:
-                # Empieza la repetición: incluimos el último frame en reposo
+                # Empieza la repetición, incluyendo el último frame en reposo
                 self._samples = [self._last_rest] if self._last_rest else []
                 self._samples.append(s)
                 self._max_p = s.progress
@@ -129,9 +118,6 @@ class RepCounter:
         return None
 
 
-# =============================================================================
-# ExerciseTracker
-# =============================================================================
 class ExerciseTracker:
     def __init__(self, exercise: Exercise, game_cfg: GameConfig, scoring_cfg: ScoringConfig):
         self.exercise = exercise
@@ -141,13 +127,11 @@ class ExerciseTracker:
         self._ema: np.ndarray | None = None
         self._last_seen = -1e9
 
-    # --- Estado --------------------------------------------------------------
     def reset(self) -> None:
         self.counter.reset()
         self.exercise.reset()
         self._ema = None
 
-    # --- Actualización por frame ---------------------------------------------
     def update(self, pose: PoseFrame | None, now: float, counting: bool = True) -> TrackerState:
         if pose is None:
             if now - self._last_seen > self.game_cfg.pose_lost_reset:
@@ -159,7 +143,7 @@ class ExerciseTracker:
         if m is None:
             return TrackerState(detected=True, issue=self.exercise.visibility_hint)
 
-        # Suavizado exponencial de los ángulos (reduce el ruido del detector)
+        # Suavizado exponencial de los ángulos para reducir el ruido del detector
         a = self.game_cfg.smoothing_alpha
         self._ema = m.features.copy() if self._ema is None else a * m.features + (1 - a) * self._ema
         progress = self.exercise.progress(self._ema)

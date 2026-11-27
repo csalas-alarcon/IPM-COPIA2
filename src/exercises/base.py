@@ -1,24 +1,15 @@
 """
-exercises/base.py  ·  Definición genérica de un ejercicio.
+Definición genérica de un ejercicio: dos poses de referencia dadas como ángulos
+articulares, reposo (progreso 0) y máximo esfuerzo (progreso 1).
 
-Cada ejercicio describe dos poses de referencia mediante ángulos articulares:
-  * reposo (rest)            -> progreso 0
-  * máximo esfuerzo (peak)   -> progreso 1
+Los ángulos no dependen de la distancia a la cámara ni de dónde esté la persona.
+El progreso indica a cuál de las dos poses se parece más la actual:
+    p = d(reposo) / (d(reposo) + d(máximo))
 
-Los ángulos se usan en lugar de las coordenadas crudas porque no dependen de
-la distancia a la cámara ni de la posición de la persona en el encuadre.
-
-El progreso se calcula según lo cerca que está la pose actual de cada
-referencia:   p = d(reposo) / (d(reposo) + d(máximo))
-
-Las referencias de cada clase son las "estándar". Con la calibración
-(repetición de prueba, ver analysis/calibration.py) se sustituyen por las del
-propio usuario con set_reference(); reset_reference() vuelve a las estándar.
+Las referencias de cada clase son las estándar. La calibración las sustituye por
+las del usuario con set_reference(); reset_reference() vuelve a las estándar.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from abc import ABC
@@ -29,19 +20,13 @@ import numpy as np
 from vision.pose import SIDES, Landmark, PoseFrame, angle_to_vertical, distance, side_landmark
 
 
-# =============================================================================
-# Constantes
-# =============================================================================
 NOSE = int(Landmark.NOSE)
 
 
-# =============================================================================
-# Tipos de datos
-# =============================================================================
 @dataclass(frozen=True)
 class FeatureSpec:
     name: str
-    joints: tuple[str, str, str]   # Articulaciones sin lado: ("SHOULDER", "ELBOW", "WRIST")
+    joints: tuple[str, str, str]   # Articulaciones sin lado, con el vértice en medio
     rest: float                    # Ángulo en reposo (grados)
     peak: float                    # Ángulo en máximo esfuerzo (grados)
     weight: float = 1.0
@@ -53,9 +38,6 @@ class Measurement:
     sides: tuple[str, ...]         # Lados usados para medir
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class Exercise(ABC):
     key: str = ""
     name: str = ""
@@ -78,12 +60,11 @@ class Exercise(ABC):
         self.weights = w / w.sum()
         self.reset_reference()
 
-    # --- Poses de referencia (estándar o calibradas) -------------------------
+    # --- Referencias (estándar o calibradas) ---
     def set_reference(self, rest: np.ndarray, peak: np.ndarray,
                       profile: tuple[np.ndarray, np.ndarray] | None = None,
                       calibrated: bool = True) -> None:
-        """Fija las poses de referencia (ángulos) y, opcionalmente, la trayectoria
-        de referencia (perfil de ida y de vuelta, ver analysis/scoring.py)."""
+        """Fija los ángulos de referencia y, opcionalmente, el perfil de ida y vuelta."""
         rest = np.array(rest, dtype=float)
         peak = np.array(peak, dtype=float)
         span = peak - rest
@@ -97,11 +78,11 @@ class Exercise(ABC):
         """Vuelve a las referencias estándar del ejercicio."""
         self.set_reference(self.default_rest, self.default_peak, None, calibrated=False)
 
-    # --- Estado interno (p. ej. pierna adelantada en la sentadilla búlgara) --
+    # --- Estado interno (lo usa la sentadilla búlgara) ---
     def reset(self) -> None:
         pass
 
-    # --- Medición ------------------------------------------------------------
+    # --- Medición ---
     def side_visibility(self, pose: PoseFrame, side: str) -> float:
         return pose.mean_visibility(side_landmark(side, j) for j in self.required_joints)
 
@@ -131,16 +112,16 @@ class Exercise(ABC):
         total = d_rest + d_peak
         return float(d_rest / total) if total > 1e-9 else 0.0
 
-    # --- Postura y técnica (a sobreescribir) ---------------------------------
+    # --- Postura y técnica (las sobreescriben los ejercicios) ---
     def check_posture(self, pose: PoseFrame, sides: tuple[str, ...]) -> tuple[bool, str]:
-        """¿Está la persona en la posición del ejercicio? (si no, no se cuentan reps)."""
+        """Si la persona no está en la posición del ejercicio, no se cuentan reps."""
         return True, ""
 
     def form_penalties(self, pose: PoseFrame, sides: tuple[str, ...], progress: float) -> dict[str, float]:
-        """Penalizaciones de técnica por frame: {regla: 0 (perfecto) .. 1 (mal)}."""
+        """Penalización de cada regla de técnica: 0 (perfecto) a 1 (mal)."""
         return {}
 
-    # --- Utilidades para las subclases ---------------------------------------
+    # --- Utilidades para los ejercicios ---
     @staticmethod
     def _mid(pose: PoseFrame, joint: str, sides: tuple[str, ...]) -> np.ndarray:
         return np.mean([pose.point(side_landmark(s, joint)) for s in sides], axis=0)

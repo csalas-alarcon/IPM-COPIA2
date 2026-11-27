@@ -1,28 +1,12 @@
 """
-vision/camera.py  ·  Captura de vídeo.
+Captura de vídeo: webcam, cámara del móvil (URL) o archivo de vídeo grabado.
 
-Lee frames de:
-  * una webcam (índice 0, 1...);
-  * la cámara del móvil (stream por URL, p. ej. IP Webcam / DroidCam);
-  * un archivo de vídeo grabado (.mp4, .avi, .mov...).
-
-Con un archivo de vídeo, el juego funciona igual que en vivo: el vídeo se
-reproduce a su velocidad real (si el equipo va lento, se saltan frames para no
-retrasarse) y el reloj del juego es el del propio vídeo, de modo que las
-duraciones, la cuenta atrás y el tempo de las repeticiones son exactos. El
-vídeo empieza en pausa (primer frame) y se controla con play / pause / rewind.
-
-Los frames se adaptan para la interfaz: si son más altos que la resolución
-pedida se reducen, y si son verticales (vídeo del móvil) se centran sobre un
-fondo oscuro de 16:9. La detección se hace sobre ese mismo frame.
-
-NoSource es una fuente vacía (pantalla oscura) para arrancar sin cámara y
-elegir un vídeo desde el menú.
+Un archivo se reproduce a su velocidad real (si el equipo va lento se saltan
+frames) y el reloj del juego es el del propio vídeo. Empieza en pausa y se
+controla con play / pause / rewind. NoSource es una fuente vacía (pantalla
+oscura) para arrancar sin cámara y elegir un vídeo desde el menú.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import time
@@ -33,19 +17,12 @@ import numpy as np
 
 from config import CameraConfig
 
-
-# =============================================================================
-# Constantes
-# =============================================================================
 _DEFAULT_FPS = 30.0
 _MAX_CATCH_UP_FRAMES = 120   # Máximo de frames que se saltan de golpe si el equipo va lento
-_MIN_ASPECT = 4 / 3          # Más estrecho que esto (vertical) -> se rellena a 16:9
+_MIN_ASPECT = 4 / 3          # Más estrecho que esto (vídeo vertical) se rellena hasta 16:9
 _PAD_COLOR = (24, 20, 18)
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def parse_source(source: int | str) -> int | str:
     """'0' -> 0 ; 'http://...' y rutas de archivo se dejan tal cual."""
     if isinstance(source, str) and source.strip().isdigit():
@@ -54,7 +31,7 @@ def parse_source(source: int | str) -> int | str:
 
 
 def fit_frame(frame: np.ndarray, max_height: int) -> np.ndarray:
-    """Reduce frames demasiado grandes y centra los verticales sobre un fondo 16:9."""
+    """Reduce los frames demasiado grandes y centra los verticales sobre un fondo 16:9."""
     h, w = frame.shape[:2]
     if max_height > 0 and h > max_height * 1.05:
         scale = max_height / h
@@ -77,9 +54,6 @@ def is_video_file(source: int | str) -> bool:
     return Path(source).expanduser().is_file()
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class Camera:
     def __init__(self, cfg: CameraConfig):
         self.cfg = cfg
@@ -87,7 +61,7 @@ class Camera:
         self.is_video = is_video_file(self.source)
         if self.is_video:
             self.source = str(Path(self.source).expanduser().resolve())
-        self.frame_id = 0            # Aumenta con cada frame nuevo (no al repetir uno en pausa)
+        self.frame_id = 0            # Sube con cada frame nuevo, no al repetir uno en pausa
         self._failed = 0
         self._cap = None
         self._open()
@@ -113,13 +87,13 @@ class Camera:
                 "que ningún otro programa la usa, o prueba otro índice con --source 1."
             )
 
-    # --- Vídeo: estado de reproducción ---------------------------------------
+    # --- Reproducción de vídeo ---
     def _reset_playback(self) -> None:
         self.paused = True
         self.ended = False
         self._pos = -1               # Índice del frame actual
         self._frame: np.ndarray | None = None
-        self._t0 = 0.0               # Instante (reloj real) que corresponde al frame 0
+        self._t0 = 0.0               # Instante del reloj real que corresponde al frame 0
         start = int(round(max(self.cfg.start_seconds, 0.0) * self.fps))
         if start > 0 and (self.frame_count <= 0 or start < self.frame_count - 1):
             self._cap.set(cv2.CAP_PROP_POS_FRAMES, start)
@@ -128,7 +102,7 @@ class Camera:
             raise RuntimeError(f"El vídeo '{self.source}' no tiene frames legibles.")
 
     def _grab_next(self, retrieve: bool) -> bool:
-        """Avanza un frame. Si retrieve, lo decodifica y lo guarda como frame actual."""
+        """Avanza un frame; con retrieve lo decodifica y lo deja como frame actual."""
         if retrieve:
             ok, frame = self._cap.read()
             ok = ok and frame is not None
@@ -143,13 +117,13 @@ class Camera:
         return True
 
     def _advance_video(self) -> None:
-        """Avanza hasta el frame que toca según el reloj real (espera o salta frames)."""
+        """Avanza hasta el frame que toca según el reloj real: espera o salta frames."""
         due = (self._pos + 1) / self.fps                     # Instante del siguiente frame
         elapsed = time.monotonic() - self._t0
         if elapsed < due:                                    # Vamos adelantados: esperar
             time.sleep(min(due - elapsed, 1.0 / self.fps))
             elapsed = time.monotonic() - self._t0
-        target = max(int(elapsed * self.fps), self._pos + 1)  # Frame que corresponde ahora
+        target = max(int(elapsed * self.fps), self._pos + 1)
         skip = min(target - self._pos - 1, _MAX_CATCH_UP_FRAMES)
         for _ in range(skip):                                # Vamos retrasados: saltar
             if not self._grab_next(retrieve=False):
@@ -158,7 +132,7 @@ class Camera:
         if not self._grab_next(retrieve=True):
             self._finish()
             return
-        if skip == _MAX_CATCH_UP_FRAMES:                     # Re-sincroniza tras un parón largo
+        if skip == _MAX_CATCH_UP_FRAMES:                     # Tras un parón largo, vuelve a sincronizar
             self._t0 = time.monotonic() - self._pos / self.fps
 
     def _finish(self) -> None:
@@ -214,7 +188,7 @@ class Camera:
     def duration(self) -> float:
         return self.frame_count / self.fps if self.is_video and self.frame_count > 0 else 0.0
 
-    # --- Reloj ---------------------------------------------------------------
+    # --- Reloj ---
     def clock(self) -> float:
         """Tiempo (s) del frame actual: el del vídeo, o el reloj real en vivo."""
         return self.position if self.is_video else time.monotonic()
@@ -223,12 +197,11 @@ class Camera:
         """Timestamp del frame actual para el detector (None en vivo: usa el reloj real)."""
         return int(round(self.position * 1000)) if self.is_video else None
 
-    # --- Lectura -------------------------------------------------------------
+    # --- Lectura ---
     def read(self) -> np.ndarray | None:
-        """Devuelve un frame BGR (ya espejado si procede) o None si falló la lectura.
+        """Devuelve un frame BGR (espejado si procede) o None si falla la lectura.
 
-        Con un vídeo en pausa o terminado devuelve otra vez el frame actual
-        (sin aumentar frame_id).
+        Con un vídeo en pausa o terminado repite el frame actual sin subir frame_id.
         """
         if self.is_video:
             if not self.paused:
@@ -247,7 +220,7 @@ class Camera:
         mirror = self.cfg.mirror_video if self.is_video else self.cfg.mirror
         return cv2.flip(frame, 1) if mirror else frame.copy()
 
-    # --- Cierre (también usable con "with") ----------------------------------
+    # --- Cierre (también con "with") ---
     def release(self) -> None:
         if self._cap is not None:
             self._cap.release()
@@ -261,8 +234,7 @@ class Camera:
 
 
 class NoSource:
-    """Fuente vacía: pantalla oscura, sin detección. Permite abrir el juego sin
-    cámara y elegir un vídeo desde el menú."""
+    """Fuente vacía (pantalla oscura) para abrir el juego sin cámara."""
     is_video = False
     is_null = True
     source = None

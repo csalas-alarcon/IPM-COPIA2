@@ -1,15 +1,8 @@
 """
-vision/pose.py  ·  Representación de una pose.
-
-Contiene:
-  * Landmark / side_landmark / POSE_CONNECTIONS: los 33 puntos del modelo.
-  * joint_angle / angle_to_vertical / distance: geometría sobre puntos 2D/3D.
-  * PoseFrame: la pose detectada en un frame (puntos, visibilidad, 3D).
+Representación de una pose: los 33 puntos del modelo, geometría sobre puntos
+2D/3D y PoseFrame (la pose detectada en un frame).
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,9 +12,6 @@ from typing import Iterable
 import numpy as np
 
 
-# =============================================================================
-# Landmarks (índices y conexiones del Pose Landmarker)
-# =============================================================================
 class Landmark(IntEnum):
     NOSE = 0
     LEFT_EYE_INNER = 1
@@ -74,9 +64,6 @@ def side_landmark(side: str, joint: str) -> int:
     return int(Landmark[f"{side}_{joint}"])
 
 
-# =============================================================================
-# Geometría
-# =============================================================================
 def joint_angle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
     """Ángulo (grados, 0-180) en el vértice b formado por los segmentos b-a y b-c."""
     v1 = np.asarray(a, dtype=float) - np.asarray(b, dtype=float)
@@ -98,15 +85,13 @@ def angle_to_vertical(vec: np.ndarray) -> float:
 
 
 def distance(a: np.ndarray, b: np.ndarray) -> float:
+    """Distancia euclídea entre dos puntos."""
     return float(np.linalg.norm(np.asarray(a, dtype=float) - np.asarray(b, dtype=float)))
 
 
-# =============================================================================
-# PoseFrame
-# =============================================================================
 @dataclass(frozen=True)
 class PoseFrame:
-    image_xy: np.ndarray            # (33, 2) coordenadas en píxeles del frame mostrado
+    image_xy: np.ndarray            # (33, 2) píxeles del frame mostrado
     visibility: np.ndarray          # (33,) visibilidad 0-1
     world_xyz: np.ndarray | None    # (33, 3) metros, centrado en la cadera
     timestamp_ms: int
@@ -124,6 +109,6 @@ class PoseFrame:
         return self.image_xy[idx]
 
     def angle(self, a: int, b: int, c: int) -> float:
-        """Ángulo en b. Usa coordenadas 3D world si están disponibles."""
+        """Ángulo en b, con las coordenadas 3D si están disponibles."""
         pts = self.world_xyz if (self.use_world and self.world_xyz is not None) else self.image_xy
         return joint_angle(pts[a], pts[b], pts[c])

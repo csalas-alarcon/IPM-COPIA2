@@ -1,14 +1,8 @@
 """
-vision/detector.py  ·  Detector de pose.
-
-Envoltorio del Pose Landmarker de MediaPipe en modo VIDEO: recibe un frame
-BGR de OpenCV (de la cámara o de un vídeo grabado) y devuelve un PoseFrame
-(o None si no hay nadie).
+Envoltorio del Pose Landmarker de MediaPipe (modo VIDEO): recibe un frame BGR
+y devuelve un PoseFrame, o None si no hay nadie.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import time
@@ -22,18 +16,12 @@ from config import ModelConfig
 from vision.pose import PoseFrame
 
 
-# =============================================================================
-# Constantes
-# =============================================================================
 BaseOptions = mp.tasks.BaseOptions
 PoseLandmarker = mp.tasks.vision.PoseLandmarker
 PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class PoseDetector:
     def __init__(self, model_path: Path, cfg: ModelConfig):
         model_path = Path(model_path).resolve()
@@ -52,27 +40,24 @@ class PoseDetector:
         self._last_ts = -1
         self._offset = 0
 
-    # --- Detección -----------------------------------------------------------
     def _next_timestamp(self, timestamp_ms: int | None = None) -> int:
         # El modo VIDEO exige timestamps estrictamente crecientes. En vivo se usa
-        # el reloj real; con un vídeo, su propio timestamp más un desplazamiento
-        # que crece si el vídeo se rebobina (así el tracking sigue funcionando).
+        # el reloj real; con un vídeo, el suyo más un desplazamiento que crece
+        # al rebobinar (así el seguimiento no se rompe).
         if timestamp_ms is None:
             ts = int(time.monotonic() * 1000)
         else:
             ts = int(timestamp_ms) + self._offset
-            if ts <= self._last_ts:
-                self._offset += self._last_ts + 1 - ts
-                ts = self._last_ts + 1
         if ts <= self._last_ts:
+            if timestamp_ms is not None:
+                self._offset += self._last_ts + 1 - ts
             ts = self._last_ts + 1
         self._last_ts = ts
         return ts
 
     def detect(self, frame_bgr: np.ndarray, timestamp_ms: int | None = None) -> PoseFrame | None:
-        """Detecta la pose. timestamp_ms: instante del frame en el vídeo (None = reloj real)."""
-        # MediaPipe espera RGB (OpenCV entrega BGR)
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        """Detecta la pose. timestamp_ms es el instante del frame en el vídeo (None = reloj real)."""
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)  # MediaPipe espera RGB
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         ts = self._next_timestamp(timestamp_ms)
         result = self._landmarker.detect_for_video(image, ts)
@@ -88,7 +73,6 @@ class PoseDetector:
             world = np.array([[lm.x, lm.y, lm.z] for lm in result.pose_world_landmarks[0]], dtype=float)
         return PoseFrame(image_xy, visibility, world, ts, self.cfg.use_world_landmarks)
 
-    # --- Cierre (también usable con "with") ----------------------------------
     def close(self) -> None:
         if self._landmarker is not None:
             self._landmarker.close()

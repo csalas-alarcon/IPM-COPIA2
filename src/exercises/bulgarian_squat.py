@@ -1,24 +1,17 @@
 """
-exercises/bulgarian_squat.py  ·  Sentadilla búlgara (Bulgarian split squat).
+Sentadilla búlgara (Bulgarian split squat).
 
 Reposo: de pie con el pie trasero en un banco. Máximo: rodilla delantera a ~90º.
 Se mide sólo la pierna adelantada, que se detecta automáticamente.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from exercises.base import Exercise, FeatureSpec
 from vision.pose import SIDES, PoseFrame, distance, side_landmark
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class BulgarianSquat(Exercise):
-    # --- Definición ----------------------------------------------------------
     key = "bulgarian_squat"
     name = "Sentadilla búlgara"
     instructions = (
@@ -31,7 +24,7 @@ class BulgarianSquat(Exercise):
     visibility_hint = "No veo bien tus piernas: colócate de lado a la cámara"
     rom_feedback = "Baja más: rodilla delantera a 90º"
     features = (
-        # Medidos sobre la pierna ADELANTADA
+        # Se miden sobre la pierna adelantada
         FeatureSpec("rodilla", ("HIP", "KNEE", "ANKLE"), rest=170.0, peak=90.0, weight=1.0),
         FeatureSpec("cadera", ("SHOULDER", "HIP", "KNEE"), rest=170.0, peak=100.0, weight=0.6),
     )
@@ -45,7 +38,6 @@ class BulgarianSquat(Exercise):
         super().__init__()
         self._front: str | None = None
 
-    # --- Estado (pierna adelantada) ------------------------------------------
     def reset(self) -> None:
         self._front = None
 
@@ -67,17 +59,14 @@ class BulgarianSquat(Exercise):
             self._front = max(SIDES, key=lambda s: self.side_visibility(pose, s))
         return self._front
 
-    # --- Medición ------------------------------------------------------------
     def active_sides(self, pose: PoseFrame, min_vis: float) -> list[str]:
         front = self._front_leg(pose)
         return [front] if self.side_visibility(pose, front) >= min_vis else []
 
-    # --- Postura -------------------------------------------------------------
     def check_posture(self, pose: PoseFrame, sides: tuple[str, ...]) -> tuple[bool, str]:
         if self._torso_lean(pose, sides) > 55.0:
             return False, "Ponte de pie, con el torso erguido"
         return True, ""
 
-    # --- Técnica -------------------------------------------------------------
     def form_penalties(self, pose: PoseFrame, sides: tuple[str, ...], progress: float) -> dict[str, float]:
         return {"torso": self._ramp(self._torso_lean(pose, sides), 30.0, 50.0)}

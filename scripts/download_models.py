@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 """
-scripts/download_models.py  ·  Descarga de modelos.
-
 Descarga los modelos Pose Landmarker en <raíz del proyecto>/models.
 
 Uso:
     python scripts/download_models.py              # descarga lite, full y heavy
-    python scripts/download_models.py --model full # sólo uno
+    python scripts/download_models.py --model full # solo uno
     python scripts/download_models.py --force      # vuelve a descargar
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import argparse
@@ -26,10 +21,6 @@ if str(SRC_DIR) not in sys.path:
 from config import MODEL_VARIANTS  # noqa: E402
 from vision.models import download_model  # noqa: E402
 
-
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", choices=MODEL_VARIANTS, nargs="+", default=list(MODEL_VARIANTS))
@@ -40,8 +31,8 @@ def main() -> int:
     for variant in args.model:
         try:
             download_model(variant, force=args.force)
-        except Exception as e:  # noqa: BLE001
-            print(f"[modelos] Error descargando '{variant}': {e}", file=sys.stderr)
+        except Exception as error:  # noqa: BLE001
+            print(f"[modelos] Error descargando '{variant}': {error}", file=sys.stderr)
             failed.append(variant)
     return 1 if failed else 0
 

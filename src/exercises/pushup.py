@@ -1,23 +1,16 @@
 """
-exercises/pushup.py  ·  Flexión (push-up).
+Flexión (push-up).
 
 Reposo: plancha con los brazos estirados. Máximo: codos a ~90º.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from exercises.base import Exercise, FeatureSpec
 from vision.pose import PoseFrame
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class PushUp(Exercise):
-    # --- Definición ----------------------------------------------------------
     key = "pushup"
     name = "Flexión"
     instructions = (
@@ -40,19 +33,17 @@ class PushUp(Exercise):
         "simetria": "Empuja por igual con los dos brazos",
     }
 
-    # --- Postura -------------------------------------------------------------
     def check_posture(self, pose: PoseFrame, sides: tuple[str, ...]) -> tuple[bool, str]:
         if self._torso_lean(pose, sides) < 45.0:
             return False, "Colócate en plancha: cuerpo horizontal"
         return True, ""
 
-    # --- Técnica -------------------------------------------------------------
     def form_penalties(self, pose: PoseFrame, sides: tuple[str, ...], progress: float) -> dict[str, float]:
         body = min(self._angle(pose, s, "SHOULDER", "HIP", "ANKLE") for s in sides)
         knee = min(self._angle(pose, s, "HIP", "KNEE", "ANKLE") for s in sides)
         pens = {
-            "cuerpo": self._ramp(-body, -165.0, -140.0),
-            "rodillas": self._ramp(-knee, -160.0, -130.0),
+            "cuerpo": self._ramp(body, 165.0, 140.0),
+            "rodillas": self._ramp(knee, 160.0, 130.0),
         }
         sym = self._asymmetry(pose, sides, ("SHOULDER", "ELBOW", "WRIST"))
         if sym is not None:

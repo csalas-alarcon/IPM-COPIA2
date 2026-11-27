@@ -1,12 +1,9 @@
 """
-exercises/pullup.py  ·  Dominada (pull-up).
+Dominada (pull-up).
 
 Reposo: colgado con los brazos estirados. Máximo: barbilla sobre la barra.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import numpy as np
@@ -15,11 +12,7 @@ from exercises.base import NOSE, Exercise, FeatureSpec
 from vision.pose import PoseFrame, side_landmark
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class PullUp(Exercise):
-    # --- Definición ----------------------------------------------------------
     key = "pullup"
     name = "Dominada"
     instructions = (
@@ -32,7 +25,6 @@ class PullUp(Exercise):
     visibility_hint = "No veo bien tus brazos y tronco (manos, codos, hombros y cadera)"
     rom_feedback = "Sube más: la barbilla debe pasar la barra"
     features = (
-        # Reposo: colgado (codo ~165º, brazo junto a la cabeza). Máximo: arriba.
         FeatureSpec("codo", ("SHOULDER", "ELBOW", "WRIST"), rest=165.0, peak=55.0, weight=1.0),
         FeatureSpec("hombro", ("HIP", "SHOULDER", "ELBOW"), rest=165.0, peak=45.0, weight=0.7),
     )
@@ -44,21 +36,18 @@ class PullUp(Exercise):
         "balanceo": "Evita balancearte o subir las rodillas",
     }
 
-    # --- Postura -------------------------------------------------------------
     def check_posture(self, pose: PoseFrame, sides: tuple[str, ...]) -> tuple[bool, str]:
         wrist_y = self._mid(pose, "WRIST", sides)[1]
         shoulder_y = self._mid(pose, "SHOULDER", sides)[1]
-        # En imagen la y crece hacia abajo: las manos deben estar por encima de los hombros
+        # La y de la imagen crece hacia abajo: las manos deben quedar por encima de los hombros
         if wrist_y > shoulder_y + 0.15 * self._torso_length(pose, sides):
             return False, "Agárrate a la barra: manos por encima de la cabeza"
         return True, ""
 
-    # --- Técnica -------------------------------------------------------------
     def form_penalties(self, pose: PoseFrame, sides: tuple[str, ...], progress: float) -> dict[str, float]:
         pens: dict[str, float] = {}
         torso = self._torso_length(pose, sides)
-
-        # Barbilla sobre las manos: sólo se evalúa cerca de la parte alta
+        # La barbilla solo se evalúa cerca de la parte alta
         if progress >= 0.8 and self._visible(pose, NOSE):
             wrist_y = float(np.min([pose.point(side_landmark(s, "WRIST"))[1] for s in sides]))
             nose_y = pose.point(NOSE)[1]
@@ -68,8 +57,8 @@ class PullUp(Exercise):
         if sym is not None:
             pens["simetria"] = sym
 
-        # Flexión de cadera (kipping / rodillas al pecho)
+        # Flexión de cadera: balanceo (kipping) o rodillas al pecho
         if all(self._visible(pose, side_landmark(s, "KNEE")) for s in sides):
             hip = float(np.mean([self._angle(pose, s, "SHOULDER", "HIP", "KNEE") for s in sides]))
-            pens["balanceo"] = self._ramp(-hip, -150.0, -115.0)
+            pens["balanceo"] = self._ramp(hip, 150.0, 115.0)
         return pens
