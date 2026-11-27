@@ -1,16 +1,14 @@
 """
-tests/test_analisis.py  ·  Pruebas de ejercicios, conteo, puntuación y calibración.
+Pruebas de src/exercises y src/analysis sin cámara.
 
-Sin cámara: poses sintéticas construidas a mano y progresos simulados.
-Complementa a tests/test_logic.py (que ya cubre el juego completo).
+Poses sintéticas hechas a mano y progresos simulados: ejercicios, conteo,
+puntuación, calibración y catálogo. Las pruebas con los tres ejercicios y las
+partidas completas están en test_logic.py.
 
 Ejecutar:  .venv/bin/python -m unittest tests.test_analisis -v
 (Windows:  .venv\\Scripts\\python -m unittest tests.test_analisis -v)
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import sys
@@ -43,9 +41,7 @@ from exercises.pushup import PushUp  # noqa: E402
 from vision.pose import Landmark, PoseFrame  # noqa: E402
 
 
-# =============================================================================
-# Utilidades: poses sintéticas y progresos simulados
-# =============================================================================
+# --- Utilidades: poses sintéticas y progresos simulados ---
 def esqueleto(puntos: dict, vis: float = 0.95) -> PoseFrame:
     """Pose 2D en la que sólo son visibles las articulaciones de `puntos`.
 
@@ -136,9 +132,7 @@ def rep_ideal(pico: float = 80.0):
     return t, (165.0 + s * (pico - 165.0))[:, None]
 
 
-# =============================================================================
-# Ejercicios: base (normalización, progreso, referencias, medición)
-# =============================================================================
+# --- Ejercicios: base (normalización, progreso, referencias, medición) ---
 class TestEjercicioBase(unittest.TestCase):
     def setUp(self):
         self.ex = PushUp()
@@ -222,9 +216,7 @@ class TestEjercicioBase(unittest.TestCase):
         self.assertAlmostEqual(float(medida.features[0]), 120.0, places=4)
 
 
-# =============================================================================
-# Posturas y técnica de cada ejercicio
-# =============================================================================
+# --- Posturas y técnica de cada ejercicio ---
 class TestFlexion(unittest.TestCase):
     def setUp(self):
         self.ex = PushUp()
@@ -346,9 +338,7 @@ class TestPenalizacionesGenerales(unittest.TestCase):
                     self.assertTrue(0.0 <= valor <= 1.0, f"{ex.key}/{regla}: {valor}")
 
 
-# =============================================================================
-# Conteo de repeticiones (RepCounter)
-# =============================================================================
+# --- Conteo de repeticiones (RepCounter) ---
 class TestRepCounter(unittest.TestCase):
     def setUp(self):
         self.cfg = Settings().scoring
@@ -399,9 +389,7 @@ class TestRepCounter(unittest.TestCase):
         self.assertIs(c.state, RepState.REST)
 
 
-# =============================================================================
-# ExerciseTracker: medición, postura, avisos y contador
-# =============================================================================
+# --- ExerciseTracker: medición, postura, avisos y contador ---
 class TestExerciseTracker(unittest.TestCase):
     def setUp(self):
         self.settings = Settings()
@@ -441,9 +429,7 @@ class TestExerciseTracker(unittest.TestCase):
         self.assertIsNone(buena.issue)
 
 
-# =============================================================================
-# Puntuación (scoring.py)
-# =============================================================================
+# --- Puntuación (scoring.py) ---
 class TestPuntuacion(unittest.TestCase):
     def setUp(self):
         self.cfg = Settings().scoring
@@ -535,9 +521,7 @@ class TestPuntuacion(unittest.TestCase):
         self.assertEqual(datos["feedback"], ["Aviso"])
 
 
-# =============================================================================
-# Calibración (analysis/calibration.py)
-# =============================================================================
+# --- Calibración (analysis/calibration.py) ---
 class TestCalibracion(unittest.TestCase):
     def setUp(self):
         self.settings = Settings()
@@ -590,9 +574,7 @@ class TestCalibracion(unittest.TestCase):
         self.assertIsNone(cal.result)
 
 
-# =============================================================================
-# Catálogo de ejercicios
-# =============================================================================
+# --- Catálogo de ejercicios ---
 class TestCatalogo(unittest.TestCase):
     def test_catalogo_tiene_los_tres_ejercicios_con_su_propia_clave(self):
         self.assertEqual(set(EXERCISES), {"pullup", "pushup", "bulgarian_squat"})
@@ -611,8 +593,5 @@ class TestCatalogo(unittest.TestCase):
             build_exercises(["pushup", "remo"])
 
 
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 """
-tests/test_interfaz.py  ·  Pruebas de la interfaz sin ventana.
+Pruebas de la interfaz sin ventana.
 
 Lienzo, botones, gráficas, pantallas, sonido, grabación y lista de vídeos.
 Todo se dibuja en frames en memoria: no se abre ninguna ventana ni tkinter.
@@ -8,9 +8,6 @@ Ejecutar:  .venv/bin/python -m unittest tests.test_interfaz -v
 (Windows:  .venv\\Scripts\\python -m unittest tests.test_interfaz -v)
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import contextlib
@@ -44,9 +41,7 @@ from ui.widgets import button, checkbox, draw_line_chart, draw_rep_chart  # noqa
 from utilidades import RelojFalso  # noqa: E402
 
 
-# =============================================================================
-# Utilidades
-# =============================================================================
+# --- Utilidades ---
 def nuevo_lienzo(alto=720, ancho=1280):
     """Lienzo negro de un frame del tamaño dado."""
     return Canvas(np.zeros((alto, ancho, 3), np.uint8), TextRenderer())
@@ -71,9 +66,7 @@ def entrada(i, exercises=("Flexión",)):
                         8, 70 + i, list(exercises))
 
 
-# =============================================================================
-# Canvas: colores y escala
-# =============================================================================
+# --- Canvas: colores y escala ---
 class TestColores(unittest.TestCase):
     def test_lerp_interpola_y_recorta(self):
         self.assertEqual(lerp_color((0, 0, 0), (100, 200, 250), 0.5), (50, 100, 125))
@@ -118,9 +111,7 @@ class TestEscala(unittest.TestCase):
         self.assertEqual(int(c.frame[0, 0, 0]), 100)
 
 
-# =============================================================================
-# Canvas: formas, ratón y texto
-# =============================================================================
+# --- Canvas: formas, ratón y texto ---
 class TestFormas(unittest.TestCase):
     def test_panel_fuera_de_la_pantalla_no_cambia_nada(self):
         c = nuevo_lienzo()
@@ -176,9 +167,7 @@ class TestTexto(unittest.TestCase):
             self.assertIsNotNone(r.font(size))
 
 
-# =============================================================================
-# Widgets: botones, casillas y gráficas
-# =============================================================================
+# --- Widgets: botones, casillas y gráficas ---
 class TestBotones(unittest.TestCase):
     def test_boton_registra_accion_y_rectangulo_en_pixeles(self):
         c = nuevo_lienzo(480, 640)                            # Escala 2/3
@@ -229,9 +218,7 @@ class TestGraficas(unittest.TestCase):
         self.assertFalse(np.array_equal(vacia.frame, normal.frame))
 
 
-# =============================================================================
-# Pantallas: formatos y elementos comunes
-# =============================================================================
+# --- Pantallas: formatos y elementos comunes ---
 class TestFormatos(unittest.TestCase):
     def test_mmss(self):
         self.assertEqual(_mmss(0), "0:00")
@@ -287,9 +274,7 @@ class TestAvisos(unittest.TestCase):
         self.assertEqual(int(c.frame.sum()), 0)
 
 
-# =============================================================================
-# Pantallas: menú, selector de vídeo e historial
-# =============================================================================
+# --- Pantallas: menú, selector de vídeo e historial ---
 class TestMenu(unittest.TestCase):
     def test_empezar_solo_con_algun_ejercicio_y_una_fuente(self):
         casos = (("sin ejercicios", menu(selected=()), False),
@@ -353,9 +338,7 @@ class TestHistorial(unittest.TestCase):
         c.finish()
 
 
-# =============================================================================
-# Sonido (sin dispositivo de audio: backend simulado)
-# =============================================================================
+# --- Sonido (sin dispositivo de audio: backend simulado) ---
 class TestSintesis(unittest.TestCase):
     def test_duracion_es_la_suma_de_las_notas(self):
         senal = synthesize([(440, 0.1), (660, 0.05)])
@@ -408,9 +391,7 @@ class TestSonido(unittest.TestCase):
         self.assertIsNone(self.sonido.backend)
 
 
-# =============================================================================
-# Grabación de la ventana
-# =============================================================================
+# --- Grabación de la ventana ---
 class TestGrabadora(unittest.TestCase):
     def setUp(self):
         self.carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
@@ -458,9 +439,7 @@ class TestGrabadora(unittest.TestCase):
         self.assertEqual(self.leer_video()[:2], (320, 240))
 
 
-# =============================================================================
-# Lista de vídeos y explorador de archivos
-# =============================================================================
+# --- Lista de vídeos y explorador de archivos ---
 class TestListaDeVideos(unittest.TestCase):
     def setUp(self):
         self.carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
@@ -498,8 +477,5 @@ class TestExplorador(unittest.TestCase):
                 self.assertEqual(ask_video_file(Path(".")), esperada)
 
 
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 if __name__ == "__main__":
     unittest.main()

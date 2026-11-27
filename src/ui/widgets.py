@@ -1,16 +1,8 @@
 """
-ui/widgets.py  ·  Elementos interactivos y gráficas.
-
-  * button / checkbox: se dibujan en el Canvas y se registran en
-    Canvas.buttons, de modo que el juego sabe qué acción lanza cada clic.
-  * draw_rep_chart: gráfica de una repetición (progreso reposo -> máximo ->
-    reposo) frente a la de referencia.
-  * draw_line_chart: gráfica de evolución (historial).
+Botones, casillas y gráficas. Los botones se registran en Canvas.buttons para que
+el juego sepa qué acción lanza cada clic.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from typing import Sequence
@@ -20,9 +12,7 @@ import numpy as np
 from ui.canvas import ACCENT, DARK, GREEN, GREY, WHITE, Canvas, lerp_color
 
 
-# =============================================================================
-# Botones
-# =============================================================================
+# --- Botones ---
 def button(c: Canvas, action: str, label: str, x1: float, y1: float, x2: float, y2: float,
            color=ACCENT, primary: bool = False, enabled: bool = True, size: float = 20) -> None:
     """Botón con clic. `action` es lo que recibe Game._do() al pulsarlo."""
@@ -58,9 +48,7 @@ def checkbox(c: Canvas, action: str, label: str, checked: bool, x1: float, y1: f
     c.buttons.append((action, (c.px(x1), c.px(y1), c.px(x2), c.px(y2))))
 
 
-# =============================================================================
-# Gráficas
-# =============================================================================
+# --- Gráficas ---
 def draw_rep_chart(c: Canvas, x1: float, y1: float, x2: float, y2: float,
                    curve: Sequence[float], reference: Sequence[float],
                    title: str = "", others: Sequence[Sequence[float]] = (),

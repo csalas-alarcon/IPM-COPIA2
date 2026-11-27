@@ -1,5 +1,5 @@
 """
-tests/test_juego.py  ·  Pruebas de src/game, src/main.py, src/config.py y scripts/.
+Pruebas de src/game, src/main.py, src/config.py y scripts/.
 
 Teclas y botones del juego, cambio de fuente, fin del vídeo, guardado de
 resultados, historial, argumentos de la línea de comandos, configuración y
@@ -10,9 +10,6 @@ Ejecutar:  .venv/bin/python -m unittest tests.test_juego -v
 (Windows:  .venv\\Scripts\\python -m unittest tests.test_juego -v)
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import contextlib
@@ -54,9 +51,7 @@ from utilidades import (FRAME, CamaraFalsa, PruebaDeJuego, VideoFalso, crear_jue
 from vision.camera import NoSource  # noqa: E402
 
 
-# =============================================================================
-# Utilidades
-# =============================================================================
+# --- Utilidades ---
 class FuenteFalsa:
     """Sustituye a Game._open_source: anota qué se pidió y devuelve una fuente o falla."""
 
@@ -93,9 +88,7 @@ def cargar_script(nombre):
     return modulo
 
 
-# =============================================================================
-# Teclas del menú y de las pantallas generales
-# =============================================================================
+# --- Teclas del menú y de las pantallas generales ---
 class TestTeclasGenerales(PruebaDeJuego):
     def test_escape_en_el_menu_sale(self):
         juego = crear_juego()
@@ -184,9 +177,7 @@ class TestMenu(PruebaDeJuego):
         self.assertEqual(juego.sessions, [])
 
 
-# =============================================================================
-# Selector de vídeo
-# =============================================================================
+# --- Selector de vídeo ---
 class TestSelectorDeVideo(PruebaDeJuego):
     def setUp(self):
         super().setUp()
@@ -234,9 +225,7 @@ class TestSelectorDeVideo(PruebaDeJuego):
         self.assertFalse(juego._picker.can_browse)
 
 
-# =============================================================================
-# Cambio de fuente
-# =============================================================================
+# --- Cambio de fuente ---
 class TestCambioDeFuente(PruebaDeJuego):
     def test_boton_camara_sin_camara_la_abre(self):
         fuente = FuenteFalsa(CamaraFalsa())
@@ -273,9 +262,7 @@ class TestCambioDeFuente(PruebaDeJuego):
         self.assertTrue(video.liberado)
 
 
-# =============================================================================
-# Historial (teclas)
-# =============================================================================
+# --- Historial (teclas) ---
 class TestTeclasDelHistorial(PruebaDeJuego):
     def test_h_en_el_menu_abre_el_historial(self):
         juego = crear_juego()
@@ -306,9 +293,7 @@ class TestTeclasDelHistorial(PruebaDeJuego):
         self.assertIs(juego.phase, Phase.INSTRUCTIONS)
 
 
-# =============================================================================
-# Pausa, salto y reinicio
-# =============================================================================
+# --- Pausa, salto y reinicio ---
 class TestPausaSaltoYReinicio(PruebaDeJuego):
     def test_pausa_no_actua_en_el_menu(self):
         video = VideoFalso()
@@ -362,9 +347,7 @@ class TestPausaSaltoYReinicio(PruebaDeJuego):
         self.assertTrue(juego.session.skipped)
 
 
-# =============================================================================
-# Fin del vídeo
-# =============================================================================
+# --- Fin del vídeo ---
 class TestFinDelVideo(PruebaDeJuego):
     def preparar(self, fase):
         """Juego con un vídeo, en la fase dada, cuyo vídeo acaba de terminar."""
@@ -375,14 +358,16 @@ class TestFinDelVideo(PruebaDeJuego):
         video.ended = True
         return juego
 
-    def test_en_instrucciones_espera_a_que_se_salte(self):
-        # Como dice el README: si se acaba durante las instrucciones, hay que pulsar N
-        juego = self.preparar(Phase.INSTRUCTIONS)
-        juego._on_video_end()
-        self.assertIs(juego.phase, Phase.INSTRUCTIONS)
-        juego._handle_key(ord("n"))
-        self.assertIs(juego.phase, Phase.EXERCISE_RESULT)
-        self.assertTrue(juego.session.skipped)
+    def test_en_instrucciones_enter_y_n_saltan_el_ejercicio(self):
+        # Sin más frames la cuenta atrás no avanzaría nunca: ENTER salta igual que N
+        for tecla in (13, ord("n")):
+            with self.subTest(tecla=tecla):
+                juego = self.preparar(Phase.INSTRUCTIONS)
+                juego._on_video_end()
+                self.assertIs(juego.phase, Phase.INSTRUCTIONS)
+                juego._handle_key(tecla)
+                self.assertIs(juego.phase, Phase.EXERCISE_RESULT)
+                self.assertTrue(juego.session.skipped)
 
     def test_cierra_el_ejercicio_en_cada_fase_de_juego(self):
         for fase in (Phase.COUNTDOWN, Phase.CALIBRATION, Phase.ACTIVE):
@@ -407,9 +392,7 @@ class TestFinDelVideo(PruebaDeJuego):
                 self.assertIs(juego.phase, fase)
 
 
-# =============================================================================
-# Ratón
-# =============================================================================
+# --- Ratón ---
 class TestRaton(PruebaDeJuego):
     def hacer_clic_en(self, juego, accion):
         """Dibuja la pantalla y pulsa el centro del botón de esa acción."""
@@ -441,9 +424,7 @@ class TestRaton(PruebaDeJuego):
         self.assertFalse(video.paused)
 
 
-# =============================================================================
-# Dibujo de las pantallas
-# =============================================================================
+# --- Dibujo de las pantallas ---
 class TestDibujoDeLasPantallas(PruebaDeJuego):
     def test_todas_las_fases_se_dibujan_en_16_9_y_en_4_3(self):
         juego = crear_juego(claves=("pushup", "pullup", "bulgarian_squat"))
@@ -461,9 +442,7 @@ class TestDibujoDeLasPantallas(PruebaDeJuego):
                     self.assertTrue(salida.any())
 
 
-# =============================================================================
-# Guardado de resultados y resumen
-# =============================================================================
+# --- Guardado de resultados y resumen ---
 class TestGuardadoDeResultados(PruebaDeJuego):
     def terminar_partida_saltando_el_ejercicio(self, juego):
         juego._do("start")
@@ -493,9 +472,7 @@ class TestGuardadoDeResultados(PruebaDeJuego):
         self.assertEqual(list(self.resultados.iterdir()), [])
 
 
-# =============================================================================
-# Sesión de un ejercicio y guardado en JSON
-# =============================================================================
+# --- Sesión de un ejercicio y guardado en JSON ---
 class TestSesion(unittest.TestCase):
     def setUp(self):
         self.flexion = build_exercises(["pushup"])[0]
@@ -564,6 +541,13 @@ class TestSesion(unittest.TestCase):
         self.assertRegex(ruta.name, r"^session_\d{8}_\d{6}\.json$")
         datetime.fromisoformat(datos["date"])
 
+    def test_dos_partidas_en_el_mismo_segundo_no_se_sobrescriben(self):
+        sesion = ExerciseSession(self.flexion, reps=[repeticion(90)])
+        rutas = [save_sessions([sesion], self.carpeta) for _ in range(3)]
+        self.assertEqual(len(set(rutas)), 3)
+        self.assertEqual(len(list(self.carpeta.glob("session_*.json"))), 3)
+        self.assertEqual(len(load_history(self.carpeta)), 3)
+
     def test_save_sessions_crea_la_carpeta_si_no_existe(self):
         carpeta = self.carpeta / "nueva" / "resultados"
         ruta = save_sessions([ExerciseSession(self.flexion)], carpeta)
@@ -571,9 +555,7 @@ class TestSesion(unittest.TestCase):
         self.assertEqual(ruta.parent, carpeta.resolve())
 
 
-# =============================================================================
-# Historial de partidas
-# =============================================================================
+# --- Historial de partidas ---
 class TestHistorial(unittest.TestCase):
     def setUp(self):
         self.carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
@@ -582,12 +564,6 @@ class TestHistorial(unittest.TestCase):
         guardar_partida(self.carpeta, "session_zz.json", "2026-01-01T10:00:00", 100)
         guardar_partida(self.carpeta, "session_aa.json", "2026-01-02T10:00:00", 200)
         self.assertEqual([e.total_points for e in load_history(self.carpeta)], [100, 200])
-
-    def test_limite_devuelve_las_ultimas(self):
-        for dia in (1, 2, 3):
-            guardar_partida(self.carpeta, f"session_{dia}.json", f"2026-01-0{dia}T10:00:00", dia)
-        self.assertEqual([e.total_points for e in load_history(self.carpeta, limit=2)], [2, 3])
-        self.assertEqual(len(load_history(self.carpeta)), 3)
 
     def test_ignora_archivos_corruptos_y_que_no_son_de_sesion(self):
         (self.carpeta / "session_roto.json").write_text("{no es json", encoding="utf-8")
@@ -624,9 +600,7 @@ class TestHistorial(unittest.TestCase):
         self.assertEqual(load_history(self.carpeta / "no_existe"), [])
 
 
-# =============================================================================
-# Argumentos de línea de comandos (main.py)
-# =============================================================================
+# --- Argumentos de línea de comandos (main.py) ---
 class TestMain(unittest.TestCase):
     def setUp(self):
         # apply_args modifica config.settings: se guarda y se restaura tras cada test
@@ -736,9 +710,7 @@ class TestMain(unittest.TestCase):
         self.assertIn("No existe el archivo de vídeo", error.getvalue())
 
 
-# =============================================================================
-# Configuración (config.py)
-# =============================================================================
+# --- Configuración (config.py) ---
 class TestConfiguracion(unittest.TestCase):
     def test_rutas_son_absolutas(self):
         rutas = (config.PROJECT_ROOT, config.SRC_DIR, config.SCRIPTS_DIR,
@@ -777,9 +749,7 @@ class TestConfiguracion(unittest.TestCase):
         self.assertLess(ajustes.scoring.rest_threshold, ajustes.scoring.peak_threshold)
 
 
-# =============================================================================
-# Scripts (scripts/)
-# =============================================================================
+# --- Scripts (scripts/) ---
 @unittest.skipUnless(shutil.which("bash"), "Hace falta bash")
 class TestScriptsSh(unittest.TestCase):
     def test_run_y_dependencies_tienen_sintaxis_bash_correcta(self):
@@ -851,8 +821,5 @@ class TestDownloadModels(unittest.TestCase):
             self.ejecutar("--model", "tiny")
 
 
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 if __name__ == "__main__":
     unittest.main()

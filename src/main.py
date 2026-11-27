@@ -1,25 +1,17 @@
 #!/usr/bin/env python3
 """
-main.py  ·  Punto de entrada.
+Punto de entrada: lee los argumentos y lanza el juego.
 
-Orquesta configuración, modelo, cámara, detector y juego.
+    python src/main.py                              # webcam 0, modelo full
+    python src/main.py --source 1                   # otra webcam
+    python src/main.py --source http://IP:8080/video  # cámara del móvil
+    python src/main.py --video demo.mp4 --start 4   # vídeo grabado
+    python src/main.py --record                     # graba la ventana en results/
 
-Uso:
-    python src/main.py                         # webcam 0, modelo full
-    python src/main.py --source 1              # otra webcam
-    python src/main.py --source http://IP:8080/video   # cámara del móvil
-    python src/main.py --model heavy --exercises pushup bulgarian_squat
-    python src/main.py --video demo.mp4        # vídeo grabado en vez de la cámara
-    python src/main.py --video demo.mp4 --exercises pushup --start 4
-    python src/main.py --record                # graba la ventana en results/grabacion_*.mp4
-
-Sin cámara (y sin --source / --video), el juego arranca igual y deja elegir un
+Sin cámara (y sin --source / --video) el juego arranca igual y deja elegir un
 vídeo desde el menú.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import argparse
@@ -42,9 +34,6 @@ from vision.detector import PoseDetector  # noqa: E402
 from vision.models import ensure_model  # noqa: E402
 
 
-# =============================================================================
-# Argumentos de línea de comandos
-# =============================================================================
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Pose Trainer: cuenta y puntúa dominadas, flexiones y sentadillas búlgaras.")
     src = p.add_mutually_exclusive_group()
@@ -119,9 +108,6 @@ def open_initial_source(args: argparse.Namespace):
         return NoSource(settings.camera.width, settings.camera.height)
 
 
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 

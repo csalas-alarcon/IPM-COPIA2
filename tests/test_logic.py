@@ -1,5 +1,5 @@
 """
-tests/test_logic.py  ·  Pruebas de integración con poses sintéticas.
+Pruebas de integración con poses sintéticas.
 
 Escenarios completos sin cámara ni ventana: puntuación y calibración de los
 tres ejercicios con repeticiones simuladas, y partidas del menú al resumen
@@ -10,9 +10,6 @@ Ejecutar:  .venv/bin/python -m unittest discover -s tests -v
 (Windows:  .venv\\Scripts\\python -m unittest discover -s tests -v)
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import json
@@ -37,9 +34,7 @@ from game.game import Phase  # noqa: E402
 from utilidades import FRAME, PruebaDeJuego, VideoFalso, crear_juego, pose_flexion  # noqa: E402
 
 
-# =============================================================================
-# Utilidades: repeticiones sintéticas
-# =============================================================================
+# --- Utilidades: repeticiones sintéticas ---
 def coseno(tau):
     """Perfil ideal de una repetición: 0 -> 1 -> 0 cuando tau va de 0 a 1."""
     return (1 - np.cos(2 * np.pi * tau)) / 2
@@ -102,9 +97,7 @@ def poses_repeticion(inicio: float, pico: float, pasos: int = 60) -> list:
     return [pose_flexion(inicio + coseno(i / pasos) * (pico - inicio)) for i in range(pasos + 1)]
 
 
-# =============================================================================
-# Puntuación de los ejercicios reales
-# =============================================================================
+# --- Puntuación de los ejercicios reales ---
 class TestPuntuacionDeLosEjercicios(unittest.TestCase):
     def setUp(self):
         self.cfg = Settings().scoring
@@ -149,9 +142,7 @@ class TestPuntuacionDeLosEjercicios(unittest.TestCase):
         self.assertIn(flexion.form_messages["cuerpo"], mala_tecnica.feedback)
 
 
-# =============================================================================
-# Calibración con una repetición de prueba
-# =============================================================================
+# --- Calibración con una repetición de prueba ---
 class TestCalibracionDelUsuario(unittest.TestCase):
     def setUp(self):
         self.ajustes = Settings()
@@ -195,9 +186,7 @@ class TestCalibracionDelUsuario(unittest.TestCase):
         self.assertEqual(float(calibrador.result.peak[1]), float(dominada.default_peak[1]))
 
 
-# =============================================================================
-# Partidas completas
-# =============================================================================
+# --- Partidas completas ---
 class TestPartidaCompleta(PruebaDeJuego):
     def test_sesion_de_flexiones_del_menu_al_resumen(self):
         sonido = mock.Mock()
@@ -318,8 +307,5 @@ class TestPartidaConRepeticionDePrueba(PruebaDeJuego):
         self.assertFalse(juego.session.calibrated)
 
 
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 if __name__ == "__main__":
     unittest.main()

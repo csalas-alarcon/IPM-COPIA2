@@ -1,13 +1,7 @@
 """
-game/session.py  ·  Resultados de la sesión.
-
-ExerciseSession guarda las repeticiones de un ejercicio y calcula sus
-estadísticas; save_sessions() escribe la sesión completa en un JSON.
+Resultados de un ejercicio (ExerciseSession) y guardado de la partida en JSON.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import json
@@ -22,9 +16,6 @@ from analysis.scoring import RepScore
 from exercises.base import Exercise
 
 
-# =============================================================================
-# Tipos de datos
-# =============================================================================
 @dataclass
 class ExerciseSession:
     exercise: Exercise
@@ -80,16 +71,19 @@ class ExerciseSession:
         }
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def save_sessions(sessions: list[ExerciseSession], results_dir: Path) -> Path:
+    """Guarda la partida en session_AAAAMMDD_HHMMSS.json (con sufijo _2, _3... si ya existe)."""
     results_dir = Path(results_dir).resolve()
     results_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = results_dir / f"session_{stamp}.json"
+    ahora = datetime.now()
+    nombre = f"session_{ahora:%Y%m%d_%H%M%S}"
+    path = results_dir / f"{nombre}.json"
+    repetida = 2
+    while path.exists():
+        path = results_dir / f"{nombre}_{repetida}.json"
+        repetida += 1
     data = {
-        "date": datetime.now().isoformat(timespec="seconds"),
+        "date": ahora.isoformat(timespec="seconds"),
         "total_points": sum(s.points for s in sessions),
         "exercises": [s.to_dict() for s in sessions],
     }

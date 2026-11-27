@@ -1,16 +1,9 @@
 """
-ui/dialogs.py  ·  Elegir un vídeo.
-
-  * list_videos: vídeos de las carpetas conocidas (videos/ del proyecto...),
-    para el selector dentro de la ventana del juego.
-  * ask_video_file: explorador de archivos del sistema (tkinter). Se abre en
-    un proceso aparte para que tkinter y la ventana de OpenCV no interfieran
-    (en macOS no pueden convivir dos toolkits gráficos en el mismo proceso).
+Elegir un vídeo: lista de las carpetas conocidas y explorador de archivos de
+tkinter. El explorador se abre en otro proceso para que tkinter y la ventana de
+OpenCV no choquen (en macOS no pueden convivir en el mismo proceso).
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import subprocess
@@ -20,10 +13,6 @@ from pathlib import Path
 
 from config import VIDEO_EXTENSIONS
 
-
-# =============================================================================
-# Constantes
-# =============================================================================
 _DIALOG_SCRIPT = r"""
 import sys, tkinter as tk
 from tkinter import filedialog
@@ -41,9 +30,6 @@ sys.stdout.write(path or "")
 """
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def list_videos(folders, limit: int = 8) -> list[Path]:
     """Vídeos de las carpetas dadas (sin repetir), ordenados por nombre."""
     seen, found = set(), []

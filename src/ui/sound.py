@@ -1,20 +1,9 @@
 """
-ui/sound.py  ·  Efectos de sonido.
-
-Pitidos generados con numpy (no hace falta ningún archivo de audio):
-cuenta atrás, inicio, repetición, repetición perfecta, incompleta, calibrado
-y fin del ejercicio.
-
-Reproducción sin bloquear el juego, con el primer sistema disponible:
-  1. sounddevice (viene con mediapipe; en Windows y macOS funciona tal cual);
-  2. winsound (Windows);
-  3. paplay / aplay (Linux, si sounddevice no encuentra PortAudio).
-Si no hay ninguno, el juego sigue sin sonido.
+Efectos de sonido: pitidos generados con numpy, sin archivos de audio. Se
+reproducen sin bloquear el juego con sounddevice, winsound o paplay/aplay, y si
+no hay ninguno el juego sigue en silencio.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import io
@@ -27,10 +16,6 @@ from pathlib import Path
 
 import numpy as np
 
-
-# =============================================================================
-# Constantes
-# =============================================================================
 SAMPLE_RATE = 44100
 
 # nombre -> lista de (frecuencia Hz, duración s); 0 Hz = silencio
@@ -46,9 +31,6 @@ SOUNDS: dict[str, list[tuple[float, float]]] = {
 }
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def synthesize(notes: list[tuple[float, float]], volume: float = 0.35) -> np.ndarray:
     """Notas -> señal float32 mono (con fundidos para que no chasquee)."""
     parts = []
@@ -76,9 +58,6 @@ def to_wav_bytes(signal: np.ndarray) -> bytes:
     return buf.getvalue()
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class Sound:
     def __init__(self, enabled: bool = True):
         self.backend: str | None = None

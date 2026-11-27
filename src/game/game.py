@@ -1,26 +1,16 @@
 """
-game/game.py  ·  Bucle principal y máquina de estados del juego.
+Bucle principal y máquina de fases del juego.
 
 MENÚ -> [por cada ejercicio: INSTRUCCIONES -> CUENTA ATRÁS -> REPETICIÓN DE PRUEBA
-         -> ACTIVO -> RESULTADO] -> RESUMEN
-Desde el menú también: SELECTOR DE VÍDEO e HISTORIAL.
+-> ACTIVO -> RESULTADO] -> RESUMEN. Desde el menú también se llega al selector de
+vídeo y al historial. Todo se maneja con teclas o con botones, y ambos acaban en
+Game._do().
 
-  * Menú: elegir la fuente (cámara o vídeo), los ejercicios y si se calibra.
-  * Repetición de prueba (si la calibración está activada): el usuario hace una
-    repetición y sus poses de reposo / máximo y su trayectoria pasan a ser la
-    referencia del ejercicio (ver analysis/calibration.py).
-  * Todo se puede hacer con el ratón (botones) o con el teclado.
-
-Funciona igual con la cámara en vivo que con un vídeo grabado. Con un vídeo:
-  * el vídeo está en pausa en el menú y empieza al pulsar EMPEZAR;
-  * el reloj del juego es el del vídeo (pausar con P congela también el juego);
-  * al terminar el vídeo se cierra el ejercicio en curso y se puede ver el resumen;
-  * R (o "jugar otra vez") rebobina el vídeo y vuelve al menú.
+Con un vídeo, el reloj del juego es el del vídeo (pausar congela el juego), el
+vídeo empieza al pulsar EMPEZAR, al terminar cierra el ejercicio en curso y R lo
+rebobina.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import dataclasses
@@ -50,19 +40,16 @@ from ui.sound import Sound
 from vision.camera import Camera, is_video_file
 from vision.detector import PoseDetector
 
-
-# =============================================================================
-# Constantes
-# =============================================================================
 KEY_ENTER = (13, 10)
 KEY_SPACE = 32
 KEY_ESC = 27
 TOAST_SECONDS = 4.0
 
+# Teclas que valen en cualquier pantalla y teclas propias del menú
+GLOBAL_KEYS = {"q": "quit", "f": "fullscreen", "r": "menu", "p": "pause", "g": "record", "n": "skip"}
+MENU_KEYS = {"c": "camera", "v": "pick_video", "h": "history", "k": "toggle_calibrate"}
 
-# =============================================================================
-# Tipos de datos
-# =============================================================================
+
 class Phase(Enum):
     MENU = auto()
     PICK_VIDEO = auto()
@@ -78,15 +65,12 @@ class Phase(Enum):
 LIVE_PHASES = (Phase.INSTRUCTIONS, Phase.COUNTDOWN, Phase.CALIBRATION, Phase.ACTIVE)
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class Game:
     def __init__(self, settings: Settings, camera, detector: PoseDetector | None,
                  exercises: list[Exercise], renderer: TextRenderer,
                  sound: Sound | None = None,
                  open_source: Callable[[int | str], Camera] | None = None):
-        """exercises: los elegidos al empezar (en orden). En el menú se pueden
+        """exercises son los elegidos al empezar (en orden). En el menú se pueden
         activar o desactivar, y también los demás del catálogo."""
         if not exercises:
             raise ValueError("Se necesita al menos un ejercicio")
@@ -96,16 +80,16 @@ class Game:
         self.renderer = renderer
         self.sound = sound or Sound(enabled=False)
         self._open_source = open_source or self._default_open_source
-        given = {ex.key for ex in exercises}
+        elegidos = {ex.key for ex in exercises}
         self.available: list[Exercise] = list(exercises) + [
-            cls() for key, cls in EXERCISES.items() if key not in given]
-        self.selected: set[str] = set(given)
+            cls() for key, cls in EXERCISES.items() if key not in elegidos]
+        self.selected: set[str] = set(elegidos)
         self.trackers = {ex.key: ExerciseTracker(ex, settings.game, settings.scoring) for ex in self.available}
         self.calibrators = {ex.key: Calibrator(ex, settings.game, settings.scoring) for ex in self.available}
         self.exercises: list[Exercise] = list(exercises)
         # Cámara a la que vuelve el botón "Cámara" del menú
-        src = settings.camera.source
-        self._camera_source = 0 if src is None or is_video_file(src) else src
+        source = settings.camera.source
+        self._camera_source = 0 if source is None or is_video_file(source) else source
         self.window = settings.game.window_name
         self.recorder: Recorder | None = None
         if settings.game.record_path:
@@ -127,7 +111,7 @@ class Game:
         self._last_tick: int | None = None
         self._reset_game(rewind=False)
 
-    # --- Fuente: cámara o vídeo -----------------------------------------------
+    # --- Fuente: cámara o vídeo ---
     @property
     def is_video(self) -> bool:
         return bool(getattr(self.camera, "is_video", False))
@@ -173,7 +157,7 @@ class Game:
     def _show_toast(self, text: str, color=ORANGE) -> None:
         self._toast = (text, color, time.monotonic() + TOAST_SECONDS)
 
-    # --- Estado --------------------------------------------------------------
+    # --- Estado ---
     @property
     def tracker(self) -> ExerciseTracker:
         return self.trackers[self.exercises[self.index].key]
@@ -259,71 +243,81 @@ class Game:
             self.index = len(self.exercises) - 1
         if self.index + 1 < len(self.exercises):
             self._start_exercise(self.index + 1)
-        else:
-            if self.settings.game.save_results:
-                history = load_history(RESULTS_DIR)
-                self._previous = history[-1] if history else None
-                try:
-                    self.saved_path = save_sessions(self.sessions, RESULTS_DIR)
-                    print(f"[juego] Resultados guardados en {self.saved_path}")
-                except OSError as e:
-                    print(f"[juego] No se pudieron guardar los resultados: {e}")
-            self._go(Phase.SUMMARY)
+            return
+        if self.settings.game.save_results:
+            history = load_history(RESULTS_DIR)
+            self._previous = history[-1] if history else None
+            try:
+                self.saved_path = save_sessions(self.sessions, RESULTS_DIR)
+                print(f"[juego] Resultados guardados en {self.saved_path}")
+            except OSError as e:
+                print(f"[juego] No se pudieron guardar los resultados: {e}")
+        self._go(Phase.SUMMARY)
 
-    # --- Lógica por fase -----------------------------------------------------
+    # --- Lógica de cada fase (se llama con cada frame nuevo) ---
     def _update(self, pose, now: float) -> None:
-        g = self.settings.game
-        elapsed = now - self._phase_start
-
         if self.phase is Phase.INSTRUCTIONS:
-            self.state = self.tracker.update(pose, now, counting=False)
-            if self._is_resting():
-                self.calibrator.add_rest(self.state.measurement.features)
-                self._ready_since = self._ready_since or now
-                if now - self._ready_since >= g.ready_hold_seconds:
-                    self._go(Phase.COUNTDOWN)
-            else:
-                self._ready_since = None
-
+            self._update_instructions(pose, now)
         elif self.phase is Phase.COUNTDOWN:
-            self.state = self.tracker.update(pose, now, counting=False)
-            if self._is_resting():
-                self.calibrator.add_rest(self.state.measurement.features)
-            tick = int(np.ceil(g.countdown_seconds - elapsed))
-            if tick != self._last_tick and tick > 0:
-                self._last_tick = tick
-                self.sound.play("tick")
-            if elapsed >= g.countdown_seconds:
-                if g.calibrate:
-                    self._go(Phase.CALIBRATION)
-                else:
-                    self._begin_active()
-
+            self._update_countdown(pose, now)
         elif self.phase is Phase.CALIBRATION:
-            self.state = self.tracker.update(pose, now, counting=False)
-            st = self.state
-            if st.posture_ok and st.measurement is not None and st.progress is not None:
-                status = self.calibrator.update(now, st.measurement.features, st.progress)
-                if status == "done":
-                    self._on_calibrated(now)
-                    return
-                if status == "retry":
-                    self.sound.play("partial")
-                    self.feedback = Feedback(["Otra vez", "Repetición de prueba incompleta",
-                                              self.exercises[self.index].rom_feedback],
-                                             ORANGE, now + g.feedback_seconds)
-            if elapsed >= g.calibration_timeout:
-                self.feedback = Feedback(["Referencia estándar", "No he visto la repetición de prueba"],
-                                         ACCENT, now + g.feedback_seconds)
-                self._begin_active()
-
+            self._update_calibration(pose, now)
         elif self.phase is Phase.ACTIVE:
-            self.state = self.tracker.update(pose, now, counting=True)
-            ev = self.state.event
-            if ev is not None:
-                self._on_event(ev, now)
-            if elapsed >= g.exercise_duration or self.session.count >= g.target_reps:
-                self._finish_exercise()
+            self._update_active(pose, now)
+
+    def _update_instructions(self, pose, now: float) -> None:
+        self.state = self.tracker.update(pose, now, counting=False)
+        if not self._is_resting():
+            self._ready_since = None
+            return
+        self.calibrator.add_rest(self.state.measurement.features)
+        self._ready_since = self._ready_since or now
+        if now - self._ready_since >= self.settings.game.ready_hold_seconds:
+            self._go(Phase.COUNTDOWN)
+
+    def _update_countdown(self, pose, now: float) -> None:
+        g = self.settings.game
+        self.state = self.tracker.update(pose, now, counting=False)
+        if self._is_resting():
+            self.calibrator.add_rest(self.state.measurement.features)
+        elapsed = now - self._phase_start
+        tick = int(np.ceil(g.countdown_seconds - elapsed))
+        if tick != self._last_tick and tick > 0:
+            self._last_tick = tick
+            self.sound.play("tick")
+        if elapsed < g.countdown_seconds:
+            return
+        if g.calibrate:
+            self._go(Phase.CALIBRATION)
+        else:
+            self._begin_active()
+
+    def _update_calibration(self, pose, now: float) -> None:
+        g = self.settings.game
+        self.state = self.tracker.update(pose, now, counting=False)
+        st = self.state
+        if st.posture_ok and st.measurement is not None and st.progress is not None:
+            status = self.calibrator.update(now, st.measurement.features, st.progress)
+            if status == "done":
+                self._on_calibrated(now)
+                return
+            if status == "retry":
+                self.sound.play("partial")
+                self.feedback = Feedback(["Otra vez", "Repetición de prueba incompleta",
+                                          self.exercises[self.index].rom_feedback],
+                                         ORANGE, now + g.feedback_seconds)
+        if now - self._phase_start >= g.calibration_timeout:
+            self.feedback = Feedback(["Referencia estándar", "No he visto la repetición de prueba"],
+                                     ACCENT, now + g.feedback_seconds)
+            self._begin_active()
+
+    def _update_active(self, pose, now: float) -> None:
+        g = self.settings.game
+        self.state = self.tracker.update(pose, now, counting=True)
+        if self.state.event is not None:
+            self._on_event(self.state.event, now)
+        if now - self._phase_start >= g.exercise_duration or self.session.count >= g.target_reps:
+            self._finish_exercise()
 
     def _is_resting(self) -> bool:
         st = self.state
@@ -345,8 +339,8 @@ class Game:
     def _on_event(self, ev, now: float) -> None:
         until = now + self.settings.game.feedback_seconds
         if ev.kind == "rep" and ev.score is not None:
-            self.session.reps.append(ev.score)
             s = ev.score
+            self.session.reps.append(s)
             title = "¡Perfecta!" if s.total >= 90 else f"+{s.total:.0f}"
             self.feedback = Feedback([title] + s.feedback[:2], score_color(s.total), until)
             self.sound.play("perfect" if s.total >= 90 else "rep")
@@ -358,7 +352,7 @@ class Game:
             self.feedback = Feedback(["Incompleta", self.session.exercise.rom_feedback], ORANGE, until)
             self.sound.play("partial")
 
-    # --- Dibujo --------------------------------------------------------------
+    # --- Dibujo ---
     def _menu_info(self) -> MenuInfo:
         kind = "video" if self.is_video else ("camera" if self.has_source else "none")
         label = getattr(self.camera, "label", "Sin cámara") if self.camera is not None else "Sin cámara"
@@ -381,8 +375,8 @@ class Game:
         elif self.phase is Phase.HISTORY:
             draw_history(c, self._history)
         elif self.phase is Phase.INSTRUCTIONS:
-            frac = 0.0 if self._ready_since is None else (now - self._ready_since) / g.ready_hold_seconds
-            draw_instructions(c, ex, self.index, len(self.exercises), self.state, min(frac, 1.0), g.calibrate)
+            ready = 0.0 if self._ready_since is None else (now - self._ready_since) / g.ready_hold_seconds
+            draw_instructions(c, ex, self.index, len(self.exercises), self.state, min(ready, 1.0), g.calibrate)
         elif self.phase is Phase.COUNTDOWN:
             draw_countdown(c, ex, g.countdown_seconds - (now - self._phase_start), g.calibrate)
         elif self.phase is Phase.CALIBRATION:
@@ -398,6 +392,7 @@ class Game:
             draw_exercise_result(c, self.session, self.index, len(self.exercises))
         elif self.phase is Phase.SUMMARY:
             draw_summary(c, self.sessions, self.saved_path, self._previous)
+
         if self.is_video and self.phase not in (Phase.MENU, Phase.PICK_VIDEO, Phase.HISTORY):
             draw_video_status(c, self.camera.position, self.camera.duration,
                               self.camera.paused, self.camera.ended, show_hint=live)
@@ -411,85 +406,95 @@ class Game:
         self._buttons = list(c.buttons)
         return out
 
-    # --- Acciones (teclado y ratón) ------------------------------------------
+    # --- Acciones (teclado y ratón) ---
     def _do(self, action: str) -> None:
         """Ejecuta una acción. Los botones y las teclas acaban todos aquí."""
         if action == "quit":
             self._running = False
-            return
-        if action == "fullscreen":
-            self._fullscreen = not self._fullscreen
-            if self._window_open:
-                cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN,
-                                      cv2.WINDOW_FULLSCREEN if self._fullscreen else cv2.WINDOW_NORMAL)
-            return
-        if action == "menu":
+        elif action == "fullscreen":
+            self._toggle_fullscreen()
+        elif action == "menu":
             self._reset_game()
-            return
-        if action == "record":
+        elif action == "record":
             self._toggle_recording()
-            return
-        if action == "pause":
+        elif action == "pause":
             if self.is_video and self.phase not in (Phase.MENU, Phase.PICK_VIDEO, Phase.HISTORY):
                 self.camera.toggle_pause()
-            return
-
-        phase = self.phase
-        if phase is Phase.MENU:
-            if action in ("start", "advance"):
-                self._start_game()
-            elif action.startswith("toggle:"):
-                key = action.split(":", 1)[1]
-                self.selected ^= {key}
-            elif action == "toggle_calibrate":
-                self.settings.game.calibrate = not self.settings.game.calibrate
-            elif action == "camera":
-                if self.has_source and not self.is_video:
-                    self._show_toast(f"Ya estás usando {self.camera.label}", GREEN)
-                else:
-                    self._switch_source(self._camera_source)
-            elif action == "pick_video":
-                folders = [VIDEOS_DIR, PROJECT_ROOT, Path.cwd()]
-                if self.is_video:
-                    folders.insert(0, Path(self.camera.source).parent)
-                self._picker = PickerInfo(list_videos(folders), VIDEOS_DIR, tk_available())
-                self._go(Phase.PICK_VIDEO)
-            elif action == "history":
-                self._open_history()
-        elif phase is Phase.PICK_VIDEO:
-            if action.startswith("video:"):
-                i = int(action.split(":", 1)[1])
-                if i < len(self._picker.videos) and self._switch_source(str(self._picker.videos[i])):
-                    self._go(Phase.MENU)
-            elif action == "browse":
-                start = Path(self.camera.source).parent if self.is_video else VIDEOS_DIR
-                path = ask_video_file(start if start.is_dir() else Path.home())
-                if path and self._switch_source(path):
-                    self._go(Phase.MENU)
-            elif action == "back":
-                self._go(Phase.MENU)
-        elif phase is Phase.HISTORY:
+        elif self.phase is Phase.MENU:
+            self._do_menu(action)
+        elif self.phase is Phase.PICK_VIDEO:
+            self._do_video_picker(action)
+        elif self.phase is Phase.HISTORY:
             if action in ("back", "advance"):
                 self._go(Phase.SUMMARY if self._history_from_summary else Phase.MENU)
-        elif phase is Phase.INSTRUCTIONS:
-            if action == "advance":
-                self._go(Phase.COUNTDOWN)
-            elif action == "skip":
-                self._finish_exercise(skipped=True)
-        elif phase is Phase.CALIBRATION:
-            if action == "advance":            # Usar la referencia estándar
-                self._begin_active()
-            elif action == "skip":
-                self._finish_exercise(skipped=True)
-        elif phase in (Phase.COUNTDOWN, Phase.ACTIVE) and action in ("advance", "skip"):
-            self._finish_exercise(skipped=action == "skip" and self.session.count == 0)
-        elif phase is Phase.EXERCISE_RESULT and action in ("advance", "skip"):
-            self._next()
-        elif phase is Phase.SUMMARY:
+        elif self.phase in LIVE_PHASES:
+            self._do_exercise(action)
+        elif self.phase is Phase.EXERCISE_RESULT:
+            if action in ("advance", "skip"):
+                self._next()
+        elif self.phase is Phase.SUMMARY:
             if action == "advance":
                 self._reset_game()
             elif action == "history":
                 self._open_history(from_summary=True)
+
+    def _do_menu(self, action: str) -> None:
+        if action in ("start", "advance"):
+            self._start_game()
+        elif action.startswith("toggle:"):
+            self.selected ^= {action.split(":", 1)[1]}
+        elif action == "toggle_calibrate":
+            self.settings.game.calibrate = not self.settings.game.calibrate
+        elif action == "camera":
+            if self.has_source and not self.is_video:
+                self._show_toast(f"Ya estás usando {self.camera.label}", GREEN)
+            else:
+                self._switch_source(self._camera_source)
+        elif action == "pick_video":
+            folders = [VIDEOS_DIR, PROJECT_ROOT, Path.cwd()]
+            if self.is_video:
+                folders.insert(0, Path(self.camera.source).parent)
+            self._picker = PickerInfo(list_videos(folders), VIDEOS_DIR, tk_available())
+            self._go(Phase.PICK_VIDEO)
+        elif action == "history":
+            self._open_history()
+
+    def _do_video_picker(self, action: str) -> None:
+        if action.startswith("video:"):
+            i = int(action.split(":", 1)[1])
+            if i < len(self._picker.videos) and self._switch_source(str(self._picker.videos[i])):
+                self._go(Phase.MENU)
+        elif action == "browse":
+            start = Path(self.camera.source).parent if self.is_video else VIDEOS_DIR
+            path = ask_video_file(start if start.is_dir() else Path.home())
+            if path and self._switch_source(path):
+                self._go(Phase.MENU)
+        elif action == "back":
+            self._go(Phase.MENU)
+
+    def _do_exercise(self, action: str) -> None:
+        """Acciones de ENTER (advance) y N (skip) durante un ejercicio."""
+        if action not in ("advance", "skip"):
+            return
+        if self.phase is Phase.INSTRUCTIONS:
+            # Con el vídeo ya acabado no llegarían frames para la cuenta atrás: se salta
+            if action == "skip" or self.video_ended:
+                self._finish_exercise(skipped=True)
+            else:
+                self._go(Phase.COUNTDOWN)
+        elif self.phase is Phase.CALIBRATION:
+            if action == "advance":            # Usar la referencia estándar
+                self._begin_active()
+            else:
+                self._finish_exercise(skipped=True)
+        else:                                  # Cuenta atrás o ejercicio en marcha
+            self._finish_exercise(skipped=action == "skip" and self.session.count == 0)
+
+    def _toggle_fullscreen(self) -> None:
+        self._fullscreen = not self._fullscreen
+        if self._window_open:
+            modo = cv2.WINDOW_FULLSCREEN if self._fullscreen else cv2.WINDOW_NORMAL
+            cv2.setWindowProperty(self.window, cv2.WND_PROP_FULLSCREEN, modo)
 
     def _open_history(self, from_summary: bool = False) -> None:
         self._history = load_history(RESULTS_DIR)
@@ -509,37 +514,32 @@ class Game:
 
     def _handle_key(self, key: int) -> None:
         """Traduce una tecla a una acción."""
-        if key == 255 or key == -1:
+        if key in (255, -1):                   # waitKey sin ninguna tecla pulsada
             return
-        phase = self.phase
         if key == KEY_ESC:
-            self._do("back" if phase in (Phase.PICK_VIDEO, Phase.HISTORY) else "quit")
-            return
-        ch = chr(key).lower() if 32 < key < 127 else ""
-        if key in KEY_ENTER or key == KEY_SPACE:
+            self._do("back" if self.phase in (Phase.PICK_VIDEO, Phase.HISTORY) else "quit")
+        elif key in KEY_ENTER or key == KEY_SPACE:
             self._do("advance")
-            return
-        global_keys = {"q": "quit", "f": "fullscreen", "r": "menu", "p": "pause", "g": "record", "n": "skip"}
-        if phase is Phase.MENU:
-            menu_keys = {"c": "camera", "v": "pick_video", "h": "history", "k": "toggle_calibrate"}
-            if ch in menu_keys:
-                self._do(menu_keys[ch])
-                return
-            if ch.isdigit() and 1 <= int(ch) <= len(self.available):
-                self._do(f"toggle:{self.available[int(ch) - 1].key}")
-                return
-        elif phase is Phase.PICK_VIDEO:
-            if ch.isdigit() and int(ch) >= 1:
-                self._do(f"video:{int(ch) - 1}")
-                return
-            if ch == "b":
-                self._do("browse")
-                return
-        elif phase is Phase.SUMMARY and ch == "h":
-            self._do("history")
-            return
-        if ch in global_keys:
-            self._do(global_keys[ch])
+        else:
+            char = chr(key).lower() if 32 < key < 127 else ""
+            action = self._action_for_char(char)
+            if action is not None:
+                self._do(action)
+
+    def _action_for_char(self, char: str) -> str | None:
+        if self.phase is Phase.MENU:
+            if char in MENU_KEYS:
+                return MENU_KEYS[char]
+            if char.isdigit() and 1 <= int(char) <= len(self.available):
+                return f"toggle:{self.available[int(char) - 1].key}"
+        elif self.phase is Phase.PICK_VIDEO:
+            if char.isdigit() and int(char) >= 1:
+                return f"video:{int(char) - 1}"
+            if char == "b":
+                return "browse"
+        elif self.phase is Phase.SUMMARY and char == "h":
+            return "history"
+        return GLOBAL_KEYS.get(char)
 
     def _on_mouse(self, event, x, y, flags, param) -> None:
         self._mouse = (x, y)
@@ -557,7 +557,7 @@ class Game:
                 self._do(action)
                 return
 
-    # --- Bucle ---------------------------------------------------------------
+    # --- Bucle principal ---
     def _window_size(self) -> tuple[int, int]:
         cam = self.settings.camera
         if not self.is_video:
@@ -567,7 +567,7 @@ class Game:
         return int(w * scale), int(h * scale)
 
     def _draw_rec_indicator(self, frame: np.ndarray) -> None:
-        """Punto rojo de grabación (después de grabar el frame, para que no salga en el vídeo)."""
+        """Punto rojo de grabación, dibujado después de grabar el frame para que no salga en el vídeo."""
         h, w = frame.shape[:2]
         s = h / 720
         cx, cy = int(w / 2 - 50 * s), int(24 * s)
@@ -591,7 +591,7 @@ class Game:
                 now = self._now()
                 fresh = self.camera.frame_id != self._last_frame_id
                 if fresh:
-                    # Sólo se detecta y se actualiza con frames nuevos (no en pausa)
+                    # Solo se detecta y se actualiza con frames nuevos (no en pausa)
                     self._last_frame_id = self.camera.frame_id
                     if self.has_source and self.detector is not None:
                         self._pose = self.detector.detect(frame, self.camera.timestamp_ms())

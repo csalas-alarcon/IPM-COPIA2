@@ -1,19 +1,9 @@
 """
-ui/canvas.py  ·  Lienzo de dibujo y texto.
-
-Contiene:
-  * Paleta de colores (BGR) y utilidades de color.
-  * TextRenderer: pinta texto con Pillow (cv2.putText no soporta tildes ni eñes).
-  * Canvas: lienzo independiente de la resolución.
-
-Todas las coordenadas del Canvas se expresan en "unidades de diseño" con
-altura 720; el lienzo las escala al tamaño real del frame (webcam 480p,
-móvil 1080p...).
+Paleta de colores (BGR), lienzo y texto. El Canvas dibuja en "unidades de diseño"
+(alto 720) y las escala al tamaño real del frame; el texto se pinta con Pillow
+porque cv2.putText no soporta tildes ni eñes.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,10 +17,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import BOLD_FONT_CANDIDATES, FONT_CANDIDATES
 
-
-# =============================================================================
-# Constantes
-# =============================================================================
 # Paleta (BGR)
 WHITE = (245, 245, 245)
 GREY = (170, 170, 170)
@@ -44,9 +30,6 @@ BLUE = (230, 160, 60)
 DESIGN_HEIGHT = 720.0
 
 
-# =============================================================================
-# Tipos de datos
-# =============================================================================
 @dataclass
 class TextItem:
     text: str
@@ -58,9 +41,6 @@ class TextItem:
     stroke: int = 0
 
 
-# =============================================================================
-# Funciones
-# =============================================================================
 def lerp_color(c1, c2, t: float) -> tuple[int, int, int]:
     t = float(np.clip(t, 0.0, 1.0))
     return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
@@ -81,9 +61,6 @@ def _first_existing(paths: Iterable[Path]) -> Path | None:
     return None
 
 
-# =============================================================================
-# TextRenderer
-# =============================================================================
 class TextRenderer:
     def __init__(self) -> None:
         self.regular = _first_existing(FONT_CANDIDATES)
@@ -113,9 +90,6 @@ class TextRenderer:
         return frame
 
 
-# =============================================================================
-# Canvas
-# =============================================================================
 class Canvas:
     def __init__(self, frame: np.ndarray, renderer: TextRenderer):
         self.frame = frame

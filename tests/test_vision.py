@@ -1,5 +1,5 @@
 """
-tests/test_vision.py  ·  Pruebas de src/vision sin cámara ni descargas.
+Pruebas de src/vision sin cámara ni descargas.
 
 Vídeo sintético diminuto (0,5 s) con un reloj simulado, geometría de poses,
 timestamps del detector y lógica de los modelos. No abre ventanas, no usa la
@@ -9,9 +9,6 @@ Ejecutar:  .venv/bin/python -m unittest tests.test_vision -v
 (Windows:  .venv\\Scripts\\python -m unittest tests.test_vision -v)
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import sys
@@ -34,9 +31,7 @@ from vision.detector import PoseDetector  # noqa: E402
 from vision.pose import Landmark, PoseFrame, angle_to_vertical, distance, joint_angle, side_landmark  # noqa: E402
 
 
-# =============================================================================
-# Constantes y utilidades
-# =============================================================================
+# --- Constantes y utilidades ---
 FPS = 10                 # Fotogramas por segundo del vídeo de prueba
 N_FRAMES = 5             # 5 frames a 10 fps = 0,5 s de vídeo
 TAMANO = (32, 24)        # (ancho, alto) del vídeo de prueba: pequeño y rápido
@@ -69,9 +64,7 @@ class RelojFalso:
         self.ahora += segundos
 
 
-# =============================================================================
-# Fuentes y frames: parse_source, is_video_file, fit_frame
-# =============================================================================
+# --- Fuentes y frames: parse_source, is_video_file, fit_frame ---
 class TestFuentes(unittest.TestCase):
     def test_parse_source_convierte_solo_los_indices_de_camara(self):
         url = "http://192.168.1.20:8080/video"
@@ -115,9 +108,7 @@ class TestFitFrame(unittest.TestCase):
         self.assertTrue(np.all(resultado[360, 640] == [255, 255, 255]))  # Centro: el vídeo
 
 
-# =============================================================================
-# Camera con un vídeo sintético y un reloj simulado
-# =============================================================================
+# --- Camera con un vídeo sintético y un reloj simulado ---
 class TestCamera(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -267,9 +258,7 @@ class TestNoSource(unittest.TestCase):
         self.assertEqual(fuente.label, "Sin cámara")
 
 
-# =============================================================================
-# Geometría: joint_angle, angle_to_vertical, distance, side_landmark
-# =============================================================================
+# --- Geometría: joint_angle, angle_to_vertical, distance, side_landmark ---
 class TestGeometria(unittest.TestCase):
     def test_joint_angle_en_2d_y_3d(self):
         origen = np.array([0, 0])
@@ -317,9 +306,7 @@ class TestGeometria(unittest.TestCase):
             side_landmark("CENTER", "ELBOW")
 
 
-# =============================================================================
-# PoseFrame
-# =============================================================================
+# --- PoseFrame ---
 class TestPoseFrame(unittest.TestCase):
     def setUp(self):
         # Hombro (11), codo (13) y muñeca (15) izquierdos. En la imagen están en
@@ -348,9 +335,7 @@ class TestPoseFrame(unittest.TestCase):
         np.testing.assert_array_equal(pose.point(11), [3, 4])
 
 
-# =============================================================================
-# Detector: _next_timestamp (sin cargar MediaPipe)
-# =============================================================================
+# --- Detector: _next_timestamp (sin cargar MediaPipe) ---
 def _detector_sin_mediapipe() -> PoseDetector:
     """PoseDetector sin modelo (se salta __init__): solo sirve para probar _next_timestamp."""
     det = PoseDetector.__new__(PoseDetector)
@@ -380,9 +365,7 @@ class TestNextTimestamp(unittest.TestCase):
             self.assertGreater(actual, anterior)
 
 
-# =============================================================================
-# Modelos: _is_valid, ensure_model, download_model
-# =============================================================================
+# --- Modelos: _is_valid, ensure_model, download_model ---
 class TestModelos(unittest.TestCase):
     def test_un_modelo_es_valido_si_existe_y_pesa_al_menos_1_mega(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -429,8 +412,5 @@ class TestModelos(unittest.TestCase):
             peticion.assert_not_called()
 
 
-# =============================================================================
-# Punto de entrada
-# =============================================================================
 if __name__ == "__main__":
     unittest.main()

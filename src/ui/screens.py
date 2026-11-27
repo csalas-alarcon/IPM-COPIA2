@@ -1,17 +1,9 @@
 """
-ui/screens.py  ·  Pantallas del juego.
-
-Una función draw_* por pantalla (menú, selector de vídeo, historial,
-instrucciones, cuenta atrás, repetición de prueba, HUD, resultado del
-ejercicio y resumen) más los elementos comunes (esqueleto, barra de
-progreso, avisos, indicador del vídeo). Todas reciben un Canvas y dibujan en
-unidades de diseño. Los botones se registran en el Canvas (ver ui/widgets.py)
-con el nombre de la acción que lanzan en Game._do().
+Pantallas del juego: una función draw_* por pantalla, más los elementos comunes
+(esqueleto, barra de progreso, avisos, indicador del vídeo). Todas dibujan en un
+Canvas; los botones llevan el nombre de la acción que recibe Game._do().
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -28,9 +20,6 @@ from ui.widgets import button, checkbox, draw_line_chart, draw_rep_chart
 from vision.pose import POSE_CONNECTIONS, PoseFrame, side_landmark
 
 
-# =============================================================================
-# Tipos de datos
-# =============================================================================
 @dataclass
 class Feedback:
     lines: list[str]
@@ -48,7 +37,6 @@ class MenuInfo:
     calibrate: bool
     duration: float
     target: int
-    message: tuple[str, tuple[int, int, int]] | None = None
 
 
 @dataclass
@@ -58,9 +46,7 @@ class PickerInfo:
     can_browse: bool = False
 
 
-# =============================================================================
-# Elementos comunes
-# =============================================================================
+# --- Elementos comunes ---
 def draw_skeleton(c: Canvas, pose: PoseFrame | None, exercise: Exercise | None = None,
                   state: TrackerState | None = None, min_vis: float = 0.3) -> None:
     if pose is None:
@@ -164,9 +150,7 @@ def draw_video_status(c: Canvas, position: float, duration: float, paused: bool,
     c.text(msg, c.W - 30, 70, 17, WHITE, "rm", bold=True)
 
 
-# =============================================================================
-# Menú, selector de vídeo e historial
-# =============================================================================
+# --- Menú, selector de vídeo e historial ---
 def draw_menu(c: Canvas, m: MenuInfo) -> None:
     c.dim(0.65)
     cx = c.W / 2
@@ -201,9 +185,7 @@ def draw_menu(c: Canvas, m: MenuInfo) -> None:
            primary=True, enabled=can_start, size=28)
     button(c, "history", "Historial (H)", cx - 200, y + 92, cx - 8, y + 132)
     button(c, "quit", "Salir (ESC)", cx + 8, y + 92, cx + 200, y + 132, color=GREY)
-    if m.message is not None:
-        draw_toast(c, *m.message)
-    elif not m.selected:
+    if not m.selected:
         draw_toast(c, "Elige al menos un ejercicio")
     elif m.source_kind == "none":
         draw_toast(c, "No hay cámara: abre un vídeo (V)")
@@ -280,9 +262,7 @@ def draw_history(c: Canvas, entries: Sequence) -> None:
     button(c, "back", "Volver (ESC)", cx - 140, c.H - 64, cx + 140, c.H - 22, color=GREY)
 
 
-# =============================================================================
-# Ejercicio: instrucciones, cuenta atrás, repetición de prueba y HUD
-# =============================================================================
+# --- Ejercicio: instrucciones, cuenta atrás, repetición de prueba y HUD ---
 def draw_instructions(c: Canvas, ex: Exercise, index: int, total: int,
                       state: TrackerState, ready_fraction: float, calibrate: bool = False) -> None:
     c.dim(0.45)
@@ -395,9 +375,7 @@ def draw_hud(c: Canvas, session, state: TrackerState, time_left: float, target: 
         button(c, "pause", "Pausa (P)", c.W - 176, c.H - 66, c.W - 26, c.H - 24, size=17, color=ORANGE)
 
 
-# =============================================================================
-# Resultado del ejercicio y resumen
-# =============================================================================
+# --- Resultado del ejercicio y resumen ---
 def draw_exercise_result(c: Canvas, session, index: int, total: int) -> None:
     c.dim(0.6)
     cx = c.W / 2

@@ -1,19 +1,9 @@
 """
-ui/recorder.py  ·  Grabación de la ventana del juego en un vídeo.
-
-Guarda en un .mp4 exactamente lo que se ve en la ventana (vídeo o cámara con
-el esqueleto, el marcador, las gráficas...). Sirve de plan B para la
-presentación: si el equipo va lento al grabar la pantalla, se reproduce este
-vídeo.
-
-El vídeo se escribe a fps fijos según el reloj real: si el juego dibuja menos
-frames por segundo, se repiten; si dibuja más, se descartan. Así la grabación
-dura lo mismo que la partida.
+Grabación de la ventana del juego en un .mp4, a fps fijos según el reloj real:
+si se dibujan menos frames por segundo se repiten, y si se dibujan más se
+descartan, de modo que la grabación dura lo mismo que la partida.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import time
@@ -23,9 +13,6 @@ import cv2
 import numpy as np
 
 
-# =============================================================================
-# Clases
-# =============================================================================
 class Recorder:
     def __init__(self, path: str | Path, fps: float = 30.0):
         self.path = Path(path).expanduser().resolve()

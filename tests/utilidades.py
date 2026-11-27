@@ -1,14 +1,11 @@
 """
-tests/utilidades.py  ·  Utilidades compartidas por las pruebas del juego.
+Utilidades compartidas por las pruebas del juego.
 
 Poses sintéticas, fuentes de vídeo falsas, un reloj simulado y una clase base
 que aísla cada prueba de results/ y del tiempo real. Lo usan test_logic.py y
 test_juego.py. No contiene pruebas.
 """
 
-# =============================================================================
-# Importaciones
-# =============================================================================
 from __future__ import annotations
 
 import contextlib
@@ -32,17 +29,10 @@ from game.game import Game  # noqa: E402
 from ui.canvas import TextRenderer  # noqa: E402
 from vision.pose import Landmark, PoseFrame  # noqa: E402
 
-
-# =============================================================================
-# Constantes
-# =============================================================================
 FRAME = np.zeros((720, 1280, 3), np.uint8)
 FPS = 30
 
 
-# =============================================================================
-# Poses sintéticas
-# =============================================================================
 def pose_flexion(codo_grados: float) -> PoseFrame:
     """Esqueleto 2D de una flexión vista de lado, con el codo al ángulo dado.
 
@@ -68,9 +58,6 @@ def pose_flexion(codo_grados: float) -> PoseFrame:
     return PoseFrame(puntos, np.full(33, 0.95), mundo, 0, True)
 
 
-# =============================================================================
-# Fuentes y reloj simulados
-# =============================================================================
 class CamaraFalsa:
     """Cámara en vivo simulada: las poses se pasan a mano al juego."""
     is_video = False
@@ -125,9 +112,6 @@ class RelojFalso:
     strftime = staticmethod(time.strftime)
 
 
-# =============================================================================
-# Juego de prueba
-# =============================================================================
 def crear_juego(ajustes: Settings | None = None, camara=None, claves=("pushup",), **opciones) -> Game:
     """Juego sin detector ni guardado de resultados. Las opciones se pasan a Game."""
     ajustes = ajustes or Settings()
